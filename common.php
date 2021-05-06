@@ -221,6 +221,9 @@ ini_set("session.gc_divisor", 100); // session.gc_divisor는 session.gc_probabil
 session_set_cookie_params(0, '/');
 ini_set("session.cookie_domain", G5_COOKIE_DOMAIN);
 
+if(! defined('G5_SESSION_NAME')) define('G5_SESSION_NAME', 'DAONPHPSESSID');
+@session_name(G5_SESSION_NAME);
+
 function chrome_domain_session_name(){
     // 크롬90버전대부터 아래 도메인을 포함된 주소로 접속시 특정조건에서 세션이 생성 안되는 문제가 있을수 있다.
     $domain_array=array(
@@ -264,7 +267,7 @@ if( $config['cf_cert_use'] || (defined('G5_YOUNGCART_VER') && G5_YOUNGCART_VER) 
             $headers = headers_list();
             krsort($headers);
             foreach ($headers as $header) {
-                if (!preg_match('~^Set-Cookie: PHPSESSID=~', $header)) continue;
+                if (!preg_match('~^Set-Cookie: '.G5_SESSION_NAME.'=~', $header)) continue;
                 $header = preg_replace('~; secure(; HttpOnly)?$~', '', $header) . '; secure; SameSite=None';
                 header($header, false);
                 $g5['session_cookie_samesite'] = 'none';
