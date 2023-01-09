@@ -17,7 +17,7 @@ if ($w == 'u' && $is_admin == 'super') {
         alert('데모 화면에서는 하실(보실) 수 없는 작업입니다.');
 }
 
-if (!chk_captcha()) {
+if (run_replace('register_member_chk_captcha', !chk_captcha(), $w)) {
     alert('자동등록방지 숫자가 틀렸습니다.');
 }
 
@@ -52,6 +52,7 @@ $mb_profile     = isset($_POST['mb_profile'])       ? trim($_POST['mb_profile'])
 $mb_recommend   = isset($_POST['mb_recommend'])     ? trim($_POST['mb_recommend'])   : "";
 $mb_mailling    = isset($_POST['mb_mailling'])      ? trim($_POST['mb_mailling'])    : "";
 $mb_sms         = isset($_POST['mb_sms'])           ? trim($_POST['mb_sms'])         : "";
+$mb_open        = isset($_POST['mb_open'])          ? trim($_POST['mb_open'])        : "0";
 $mb_1           = isset($_POST['mb_1'])             ? trim($_POST['mb_1'])           : "";
 $mb_2           = isset($_POST['mb_2'])             ? trim($_POST['mb_2'])           : "";
 $mb_3           = isset($_POST['mb_3'])             ? trim($_POST['mb_3'])           : "";
@@ -93,10 +94,15 @@ if ($w == '' || $w == 'u') {
         alert('닉네임을 올바르게 입력해 주십시오.');
     }
 
-    if ($w == '' && !$mb_password)
-        alert('비밀번호가 넘어오지 않았습니다.');
-    if($w == '' && $mb_password != $mb_password_re)
-        alert('비밀번호가 일치하지 않습니다.');
+    // 비밀번호를 체크하는 상태의 기본값은 true이며, 비밀번호를 체크하지 않으려면 hook 을 통해 false 값으로 바꿔야 합니다.
+    $is_check_password = run_replace('register_member_password_check', true, $mb_id, $mb_nick, $mb_email, $w);
+
+    if ($is_check_password){
+        if ($w == '' && !$mb_password)
+            alert('비밀번호가 넘어오지 않았습니다.');
+        if ($w == '' && $mb_password != $mb_password_re)
+            alert('비밀번호가 일치하지 않습니다.');
+    }
 
     if ($msg = empty_mb_name($mb_name))       alert($msg, "", true, true);
     if ($msg = empty_mb_nick($mb_nick))     alert($msg, "", true, true);
@@ -110,7 +116,7 @@ if ($w == '' || $w == 'u') {
     if ($msg = prohibit_mb_email($mb_email))alert($msg, "", true, true);
 
     // 휴대폰 필수입력일 경우 휴대폰번호 유효성 체크
-    if ($config['cf_use_hp'] || ($config['cf_cert_hp'] || $config['cf_cert_simple']) && $config['cf_req_hp']) {
+    if (($config['cf_use_hp'] || $config['cf_cert_hp'] || $config['cf_cert_simple']) && $config['cf_req_hp']) {
         if ($msg = valid_mb_hp($mb_hp))     alert($msg, "", true, true);
     }
 
@@ -303,8 +309,10 @@ if ($w == '') {
     }
 
     // 메일인증 사용하지 않는 경우에만 로그인
-    if (!$config['cf_use_email_certify'])
+    if (!$config['cf_use_email_certify']) {
         set_session('ss_mb_id', $mb_id);
+        if(function_exists('update_auth_session_token')) update_auth_session_token(G5_TIME_YMDHIS);
+    }
 
     set_session('ss_mb_reg', $mb_id);
 
