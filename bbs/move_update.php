@@ -41,6 +41,21 @@ while ($row = sql_fetch_array($result))
         // 존재하지 않다면
         if( !$move_board['bo_table'] ) continue;
 
+        // 대상 게시판에 대한 권한 재검증 (KVE-2026-0795)
+        // 원본 게시판 기준의 $is_admin 만으로는 타 게시판 이동/복사가 허용되지 않도록 함.
+        if ($is_admin !== 'super') {
+            $is_target_admin = false;
+            if ($is_admin === 'board' && isset($move_board['bo_admin']) && $move_board['bo_admin'] !== '' && $move_board['bo_admin'] === $member['mb_id']) {
+                $is_target_admin = true;
+            } else if ($is_admin === 'group' && isset($move_board['gr_id']) && $move_board['gr_id'] !== '') {
+                $move_group = sql_fetch(" select gr_admin from {$g5['group_table']} where gr_id = '".sql_real_escape_string($move_board['gr_id'])."' ");
+                if (!empty($move_group['gr_admin']) && $move_group['gr_admin'] === $member['mb_id']) {
+                    $is_target_admin = true;
+                }
+            }
+            if (!$is_target_admin) continue;
+        }
+
         $move_write_table = $g5['write_prefix'] . $move_bo_table;
 
         $src_dir = G5_DATA_PATH.'/file/'.$bo_table; // 원본 디렉토리
@@ -49,7 +64,9 @@ while ($row = sql_fetch_array($result))
         $count_write = 0;
         $count_comment = 0;
 
-        $next_wr_num = get_next_num($move_write_table);
+        // get_next_num 함수는 mysql 지연시 중복이 될수 있는 문제로 더 이상 사용하지 않습니다.
+        // $next_wr_num = get_next_num($move_write_table);
+        $next_wr_num = 0;
 
         $sql2 = " select * from $write_table where wr_num = '$wr_num' order by wr_parent, wr_is_comment, wr_comment desc, wr_id ";
         $result2 = sql_query($sql2);
@@ -59,7 +76,7 @@ while ($row = sql_fetch_array($result))
 
             $nick = cut_str($member['mb_nick'], $config['cf_cut_name']);
             if (!$row2['wr_is_comment'] && $config['cf_use_copy_log']) {
-                if(strstr($row2['wr_option'], 'html')) {
+                if(strpos($row2['wr_option'], 'html') !== false) {
                     $log_tag1 = '<div class="content_'.$sw.'">';
                     $log_tag2 = '</div>';
                 } else {
@@ -78,7 +95,7 @@ while ($row = sql_fetch_array($result))
             }
 
             $sql = " insert into $move_write_table
-                        set wr_num = '$next_wr_num',
+                        set wr_num = " . ($next_wr_num ? "'$next_wr_num'" : "(SELECT IFNULL(MIN(wr_num) - 1, -1) FROM $move_write_table as sq) ") . ",
                              wr_reply = '{$row2['wr_reply']}',
                              wr_is_comment = '{$row2['wr_is_comment']}',
                              wr_comment = '{$row2['wr_comment']}',
@@ -116,6 +133,11 @@ while ($row = sql_fetch_array($result))
             sql_query($sql);
 
             $insert_id = sql_insert_id();
+            
+            if ($next_wr_num === 0) {
+                $tmp = sql_fetch("select wr_num from $move_write_table where wr_id = '$insert_id'");
+                $next_wr_num = $tmp['wr_num'];
+            }
 
             // 코멘트가 아니라면
             if (!$row2['wr_is_comment'])
@@ -126,6 +148,8 @@ while ($row = sql_fetch_array($result))
                 $result3 = sql_query($sql3);
                 for ($k=0; $row3 = sql_fetch_array($result3); $k++)
                 {
+                    $copy_file_name = '';
+                    
                     if ($row3['bf_file'])
                     {
                         // 원본파일을 복사하고 퍼미션을 변경
@@ -224,10 +248,12 @@ delete_cache_latest($bo_table);
 
 if ($sw == 'move')
 {
-    for ($i=0; $i<count($save); $i++)
+    $save_cnt = count($save);
+    for ($i=0; $i<$save_cnt; $i++)
     {
         if( isset($save[$i]['bf_file']) && $save[$i]['bf_file'] ){
-            for ($k=0; $k<count($save[$i]['bf_file']); $k++) {
+            $bf_file_cnt = count($save[$i]['bf_file']);
+            for ($k=0; $k<$bf_file_cnt; $k++) {
                 $del_file = run_replace('delete_file_path', clean_relative_paths($save[$i]['bf_file'][$k]), $save[$i]);
 
                 if ( is_file($del_file) && file_exists($del_file) ){
@@ -239,7 +265,8 @@ if ($sw == 'move')
             }
         }
         
-        for ($k=0; $k<count($save[$i]['wr_contents']); $k++){
+        $wr_contents_cnt = count($save[$i]['wr_contents']);
+        for ($k=0; $k<$wr_contents_cnt; $k++){
             delete_editor_thumbnail($save[$i]['wr_contents'][$k]);
         }
 
@@ -253,7 +280,8 @@ if ($sw == 'move')
     $sql = " select bo_notice from {$g5['board_table']} where bo_table = '{$bo_table}' ";
     $row = sql_fetch($sql);
     $arr_notice = explode(',', $row['bo_notice']);
-    for ($i=0; $i<count($arr_notice); $i++) {
+    $arr_notice_cnt = count($arr_notice);
+    for ($i=0; $i<$arr_notice_cnt; $i++) {
         $move_id = (int)$arr_notice[$i];
         // 게시판에 wr_id 가 있다면 이동한게 아니므로 bo_notice 에 다시 넣음
         $row2 = sql_fetch(" select count(*) as cnt from $write_table where wr_id = '{$move_id}' ");

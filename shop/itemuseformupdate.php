@@ -1,6 +1,9 @@
 <?php
 include_once('./_common.php');
 
+// CSRF 방지: Origin/Referer 헤더로 요청 출처 검증
+if (function_exists('check_request_origin')) check_request_origin(G5_SHOP_URL);
+
 if (!$is_member) {
     alert_close("사용후기는 회원만 작성이 가능합니다.");
 }
@@ -12,7 +15,7 @@ $is_content = preg_replace('#<script(.*?)>(.*?)</script>#is', '', $is_content);
 $is_name     = isset($_POST['is_name']) ? trim($_POST['is_name']) : '';
 $is_password = isset($_POST['is_password']) ? trim($_POST['is_password']) : '';
 $is_score    = isset($_POST['is_score']) ? (int) $_POST['is_score'] : 0;
-$is_score    = ($is_score > 5) ? 0 : $is_score;
+$is_score    = ($is_score > 5 || $is_score < 1) ? 1 : $is_score;
 $get_editor_img_mode = $config['cf_editor'] ? false : true;
 $is_id       = isset($_REQUEST['is_id']) ? (int) $_REQUEST['is_id'] : 0;
 $is_mobile_shop = isset($_REQUEST['is_mobile_shop']) ? (int) $_REQUEST['is_mobile_shop'] : 0;
@@ -59,6 +62,8 @@ if ($w == "")
     if (!$default['de_item_use_use'])
         $sql .= ", is_confirm = '1' ";
     sql_query($sql);
+    $is_id = sql_insert_id();
+    run_event('shop_item_use_created', $is_id, $it_id);
 
     if ($default['de_item_use_use']) {
         $alert_msg = "평가하신 글은 관리자가 확인한 후에 출력됩니다.";
@@ -80,12 +85,13 @@ else if ($w == "u")
                     is_score = '$is_score'
               where is_id = '$is_id' ";
     sql_query($sql);
+    run_event('shop_item_use_updated', $is_id, $it_id);
 
     $alert_msg = "사용후기가 수정 되었습니다.";
 }
 else if ($w == "d")
 {
-    if (!$is_admin)
+    if ($is_admin !== 'super')
     {
         $sql = " select count(*) as cnt from {$g5['g5_shop_item_use_table']} where mb_id = '{$member['mb_id']}' and is_id = '$is_id' ";
         $row = sql_fetch($sql);
@@ -93,7 +99,7 @@ else if ($w == "d")
             alert("자신의 사용후기만 삭제하실 수 있습니다.");
     }
 
-    // 에디터로 첨부된 이미지 삭제
+    // 에디터로 첨부된 썸네일 이미지 삭제
     $sql = " select is_content from {$g5['g5_shop_item_use_table']} where is_id = '$is_id' and md5(concat(is_id,is_time,is_ip)) = '{$hash}' ";
     $row = sql_fetch($sql);
 
@@ -111,13 +117,16 @@ else if ($w == "d")
 
             $destfile = ( ! preg_match('/\w+\/\.\.\//', $data_path) ) ? G5_PATH.$data_path : '';
 
-            if($destfile && preg_match('/\/data\/editor\/[A-Za-z0-9_]{1,20}\//', $destfile) && is_file($destfile))
-                @unlink($destfile);
+            if ($destfile && preg_match('/\/data\/editor\/[A-Za-z0-9_]{1,20}\//', $destfile) && is_file($destfile)) {
+                delete_item_thumbnail(dirname($destfile), basename($destfile));
+                //@unlink($destfile);
+            }
         }
     }
 
     $sql = " delete from {$g5['g5_shop_item_use_table']} where is_id = '$is_id' and md5(concat(is_id,is_time,is_ip)) = '{$hash}' ";
     sql_query($sql);
+    run_event('shop_item_use_deleted', $is_id, $it_id);
 
     $alert_msg = "사용후기를 삭제 하였습니다.";
 }

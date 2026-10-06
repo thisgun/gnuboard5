@@ -44,6 +44,12 @@ if($popup == 'yes') { // 팝업창일 때
         $pp['pp_price'] = $od['od_misu'];
     $wrp_tag_st = '<div class="new_win">'.PHP_EOL.'<h1 id="new_win_title">'.$html_title.'</h1>';
     $wrp_tag_end = '</div>';
+
+    echo '<script>
+        if (typeof g5_admin_csrf_token_key === "undefined") {
+            var g5_admin_csrf_token_key = "' . (function_exists('admin_csrf_token_key') ? admin_csrf_token_key() : '') . '";
+        }
+    </script>';
 }
 else { // 현재페이지일 때
     include_once (G5_ADMIN_PATH.'/admin.head.php');
@@ -54,24 +60,8 @@ $pg_anchor = '<ul class="anchor">
 </ul>';
 
 // pg 설정 필드 추가
-if(!sql_query(" select pp_pg from {$g5['g5_shop_personalpay_table']} limit 1 ", false)) {
-    sql_query(" ALTER TABLE `{$g5['g5_shop_personalpay_table']}`
-                    ADD `pp_pg` varchar(255) NOT NULL DEFAULT '' AFTER `pp_price` ", true);
-
-    // 개인결제 PG kcp로 설정
-    sql_query(" update {$g5['g5_shop_personalpay_table']} set pp_pg = 'kcp' ");
-}
 
 // 현금영수증 필드 추가
-if(!sql_query(" select pp_cash from {$g5['g5_shop_personalpay_table']} limit 1 ", false)) {
-    sql_query(" ALTER TABLE `{$g5['g5_shop_personalpay_table']}`
-                    ADD `pp_cash` tinyint(4) NOT NULL DEFAULT '0' AFTER `pp_shop_memo`,
-                    ADD `pp_cash_no` varchar(255) NOT NULL DEFAULT '' AFTER `pp_cash`,
-                    ADD `pp_cash_info` text NOT NULL AFTER `pp_cash_no`,
-                    ADD `pp_email` varchar(255) NOT NULL DEFAULT '' AFTER `pp_name`,
-                    ADD `pp_hp` varchar(255) NOT NULL DEFAULT '' AFTER `pp_email`,
-                    ADD `pp_casseqno` varchar(255) NOT NULL DEFAULT '' AFTER `pp_app_no` ", true);
-}
 ?>
 
 <form name="fpersonalpayform" action="./personalpayformupdate.php" method="post" onsubmit="return form_check(this);">
@@ -204,6 +194,8 @@ if(!sql_query(" select pp_cash from {$g5['g5_shop_personalpay_table']} limit 1 "
                                 break;
                         }
                         $cash_receipt_script = 'javascript:showCashReceipts(\''.$LGD_MID.'\',\''.$pp['pp_id'].'\',\''.$pp['pp_casseqno'].'\',\''.$trade_type.'\',\''.$CST_PLATFORM.'\');';
+                    } else if($pp['pp_pg'] == 'toss') {
+                        $cash_receipt_script = 'window.open(\'https://dashboard.tosspayments.com/receipt/mids/si_'.$config['cf_lg_mid'].'/orders/'.$pp['pp_id'].'/cash-receipt?ref=dashboard\',\'receipt\',\'width=430,height=700\');';
                     } else if($pp['pp_pg'] == 'inicis') {
                         $cash = unserialize($pp['pp_cash_info']);
                         $cash_receipt_script = 'window.open(\'https://iniweb.inicis.com/DefaultWebApp/mall/cr/cm/Cash_mCmReceipt.jsp?noTid='.$cash['TID'].'&clpaymethod=22\',\'showreceipt\',\'width=380,height=540,scrollbars=no,resizable=no\');';

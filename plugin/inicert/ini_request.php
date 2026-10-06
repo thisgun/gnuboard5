@@ -9,14 +9,16 @@ if(empty($max_cr_id)) $max_cr_id = 0;
 if($config['cf_cert_use'] == 2) { // 실서비스 일때
     $mid = 'SRA'.$config['cf_cert_kg_mid']; // 부여받은 MID(상점ID) 입력(영업담당자 문의)
     $apiKey = $config['cf_cert_kg_cd'];   // 부여받은 MID 에 대한 apiKey
-    $mTxId ='SIR_'.$max_cr_id;
+    $mTxId ='SIR_'.substr($max_cr_id.'_'.round(microtime(true) * 1000), 0, 16);
     certify_count_check($member['mb_id'], 'simple'); // 금일 인증시도 횟수 체크
 } else { // 테스트 일때
-    $mid = "INIiasTest";
-    $apiKey = "TGdxb2l3enJDWFRTbTgvREU3MGYwUT09";
-    $mTxId ='test_'.$max_cr_id;
+    $mid = "SRAiasTest";
+    $apiKey = "43700dfd4c795fe9550853aef3b6aaf1";
+    $mTxId ='SIR_'.substr($max_cr_id.'_'.round(microtime(true) * 1000), 0, 16);
 }
-$reqSvcCd ='01';
+
+$reqSvcCd ='01';    // 요청구분코드 ["01":간편인증, "02":전자서명]
+$reservedMsg = (defined('KGINICIS_USE_CERT_SEED') && KGINICIS_USE_CERT_SEED) ? 'isUseToken=Y' : '';   // 결과조회 응답시 개인정보SEED 암호화 처리 요청
 
 // 등록가맹점 확인
 $plainText1 = hash("sha256",(string)$mid.(string)$mTxId.(string)$apiKey);
@@ -56,21 +58,22 @@ $g5['title'] = 'KG이니시스 간편인증';
 include_once(G5_PATH.'/head.sub.php'); 	
 ?>
     <form name="saForm">
-        <input type="hidden" name="mid" value="<?php echo $mid ?>"> <!-- 필수 값 -->
-        <input type="hidden" name="reqSvcCd" value="<?php echo $reqSvcCd ?>"> <!-- 필수 값 -->
-        <input type="hidden" name="mTxId" value="<?php echo $mTxId ?>"> <!-- 필수 값 -->
+        <input type="hidden" name="mid" value="<?php echo get_text($mid); ?>"> <!-- 필수 값 -->
+        <input type="hidden" name="reqSvcCd" value="<?php echo get_text($reqSvcCd); ?>"> <!-- 필수 값 -->
+        <input type="hidden" name="mTxId" value="<?php echo get_text($mTxId); ?>"> <!-- 필수 값 -->
 
-        <input type="hidden" name="authHash" value="<?php echo $authHash ?>"> <!-- 필수 값 -->
-        <input type="hidden" name="flgFixedUser" value="<?php echo $flgFixedUser ?>"> <!-- 필수 값 Y/N 특정사용자 인증 요청 여부 -->
-        <input type="hidden" name="userName" value="<?php echo $userName ?>">
-        <input type="hidden" name="userPhone" value="<?php echo $userPhone ?>">
-        <input type="hidden" name="userBirth" value="<?php echo $userBirth ?>">
-        <input type="hidden" name="userHash" value="<?php echo $userHash ?>">
-        <input type="hidden" name="mbId" value="<?php echo $member['mb_id'] ?>">
-        <input type="hidden" name="directAgency" value="<?php echo isset($_GET['directAgency']) ? clean_xss_tags($_GET['directAgency'], 1, 1) : ''; ?>">
+        <input type="hidden" name="authHash" value="<?php echo get_text($authHash); ?>"> <!-- 필수 값 -->
+        <input type="hidden" name="flgFixedUser" value="<?php echo get_text($flgFixedUser); ?>"> <!-- 필수 값 Y/N 특정사용자 인증 요청 여부 -->
+        <input type="hidden" name="userName" value="<?php echo get_text($userName); ?>">
+        <input type="hidden" name="userPhone" value="<?php echo get_text($userPhone); ?>">
+        <input type="hidden" name="userBirth" value="<?php echo get_text($userBirth); ?>">
+        <input type="hidden" name="userHash" value="<?php echo get_text($userHash); ?>">
+        <input type="hidden" name="reservedMsg" value="<?php echo get_text($reservedMsg); ?>">
+        <input type="hidden" name="mbId" value="<?php echo get_text($member['mb_id']); ?>">
+        <input type="hidden" name="directAgency" value="<?php echo isset($_GET['directAgency']) ? get_text(clean_xss_tags($_GET['directAgency'], 1, 1)) : ''; ?>">
 
-        <input type="hidden" name="successUrl" value="<?php echo $resultUrl; ?>"> <!-- 필수 값 -->
-        <input type="hidden" name="failUrl" value="<?php echo $resultUrl; ?>"> <!-- 필수 값 -->
+        <input type="hidden" name="successUrl" value="<?php echo get_text($resultUrl); ?>"> <!-- 필수 값 -->
+        <input type="hidden" name="failUrl" value="<?php echo get_text($resultUrl); ?>"> <!-- 필수 값 -->
         <!-- successUrl / failUrl 은 분리 하여 이용가능!-->
     </form> 
     <script>

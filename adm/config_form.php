@@ -8,404 +8,12 @@ if ($is_admin != 'super') {
     alert('최고관리자만 접근 가능합니다.');
 }
 
-$copy_config = get_config(true);
+// https://github.com/gnuboard/gnuboard5/issues/296 이슈처리
+$sql = " select * from {$g5['config_table']} limit 1";
+$config = sql_fetch($sql);
 
-if (!isset($config['cf_add_script'])) {
-    sql_query(
-        " ALTER TABLE `{$g5['config_table']}`
-                    ADD `cf_add_script` TEXT NOT NULL AFTER `cf_admin_email_name` ",
-        true
-    );
-}
-
-if (!isset($config['cf_mobile_new_skin'])) {
-    sql_query(
-        " ALTER TABLE `{$g5['config_table']}`
-                    ADD `cf_mobile_new_skin` VARCHAR(255) NOT NULL AFTER `cf_memo_send_point`,
-                    ADD `cf_mobile_search_skin` VARCHAR(255) NOT NULL AFTER `cf_mobile_new_skin`,
-                    ADD `cf_mobile_connect_skin` VARCHAR(255) NOT NULL AFTER `cf_mobile_search_skin`,
-                    ADD `cf_mobile_member_skin` VARCHAR(255) NOT NULL AFTER `cf_mobile_connect_skin` ",
-        true
-    );
-}
-
-if (isset($config['cf_gcaptcha_mp3'])) {
-    sql_query(
-        " ALTER TABLE `{$g5['config_table']}`
-                    CHANGE `cf_gcaptcha_mp3` `cf_captcha_mp3` VARCHAR(255) NOT NULL DEFAULT '' ",
-        true
-    );
-} elseif (!isset($config['cf_captcha_mp3'])) {
-    sql_query(
-        " ALTER TABLE `{$g5['config_table']}`
-                    ADD `cf_captcha_mp3` VARCHAR(255) NOT NULL DEFAULT '' AFTER `cf_mobile_member_skin` ",
-        true
-    );
-}
-
-if (!isset($config['cf_editor'])) {
-    sql_query(
-        " ALTER TABLE `{$g5['config_table']}`
-                    ADD `cf_editor` VARCHAR(255) NOT NULL DEFAULT '' AFTER `cf_captcha_mp3` ",
-        true
-    );
-}
-
-if (!isset($config['cf_googl_shorturl_apikey'])) {
-    sql_query(
-        " ALTER TABLE `{$g5['config_table']}`
-                    ADD `cf_googl_shorturl_apikey` VARCHAR(255) NOT NULL DEFAULT '' AFTER `cf_captcha_mp3` ",
-        true
-    );
-}
-
-if (!isset($config['cf_mobile_pages'])) {
-    sql_query(
-        " ALTER TABLE `{$g5['config_table']}`
-                    ADD `cf_mobile_pages` INT(11) NOT NULL DEFAULT '0' AFTER `cf_write_pages` ",
-        true
-    );
-    sql_query(" UPDATE `{$g5['config_table']}` SET cf_mobile_pages = '5' ", true);
-}
-
-if (!isset($config['cf_facebook_appid'])) {
-    sql_query(
-        " ALTER TABLE `{$g5['config_table']}`
-                    ADD `cf_facebook_appid` VARCHAR(255) NOT NULL AFTER `cf_googl_shorturl_apikey`,
-                    ADD `cf_facebook_secret` VARCHAR(255) NOT NULL AFTER `cf_facebook_appid`,
-                    ADD `cf_twitter_key` VARCHAR(255) NOT NULL AFTER `cf_facebook_secret`,
-                    ADD `cf_twitter_secret` VARCHAR(255) NOT NULL AFTER `cf_twitter_key` ",
-        true
-    );
-}
-
-// uniqid 테이블이 없을 경우 생성
-if (!sql_query(" DESC {$g5['uniqid_table']} ", false)) {
-    sql_query(
-        " CREATE TABLE IF NOT EXISTS `{$g5['uniqid_table']}` (
-                  `uq_id` bigint(20) unsigned NOT NULL,
-                  `uq_ip` varchar(255) NOT NULL,
-                  PRIMARY KEY (`uq_id`)
-                ) ",
-        false
-    );
-}
-
-if (!sql_query(" SELECT uq_ip from {$g5['uniqid_table']} limit 1 ", false)) {
-    sql_query(" ALTER TABLE {$g5['uniqid_table']} ADD `uq_ip` VARCHAR(255) NOT NULL ");
-}
-
-// 임시저장 테이블이 없을 경우 생성
-if (!sql_query(" DESC {$g5['autosave_table']} ", false)) {
-    sql_query(
-        " CREATE TABLE IF NOT EXISTS `{$g5['autosave_table']}` (
-                  `as_id` int(11) NOT NULL AUTO_INCREMENT,
-                  `mb_id` varchar(20) NOT NULL,
-                  `as_uid` bigint(20) unsigned NOT NULL,
-                  `as_subject` varchar(255) NOT NULL,
-                  `as_content` text NOT NULL,
-                  `as_datetime` datetime NOT NULL,
-                  PRIMARY KEY (`as_id`),
-                  UNIQUE KEY `as_uid` (`as_uid`),
-                  KEY `mb_id` (`mb_id`)
-                ) ",
-        false
-    );
-}
-
-if (!isset($config['cf_admin_email'])) {
-    sql_query(
-        " ALTER TABLE `{$g5['config_table']}`
-                    ADD `cf_admin_email` VARCHAR(255) NOT NULL AFTER `cf_admin` ",
-        true
-    );
-}
-
-if (!isset($config['cf_admin_email_name'])) {
-    sql_query(
-        " ALTER TABLE `{$g5['config_table']}`
-                    ADD `cf_admin_email_name` VARCHAR(255) NOT NULL AFTER `cf_admin_email` ",
-        true
-    );
-}
-
-if (!isset($config['cf_cert_use'])) {
-    sql_query(
-        " ALTER TABLE `{$g5['config_table']}`
-                    ADD `cf_cert_use` TINYINT(4) NOT NULL DEFAULT '0' AFTER `cf_editor`,
-                    ADD `cf_cert_ipin` VARCHAR(255) NOT NULL DEFAULT '' AFTER `cf_cert_use`,
-                    ADD `cf_cert_hp` VARCHAR(255) NOT NULL DEFAULT '' AFTER `cf_cert_ipin`,
-                    ADD `cf_cert_kcb_cd` VARCHAR(255) NOT NULL DEFAULT '' AFTER `cf_cert_hp`,
-                    ADD `cf_cert_kcp_cd` VARCHAR(255) NOT NULL DEFAULT '' AFTER `cf_cert_kcb_cd`,
-                    ADD `cf_cert_limit` INT(11) NOT NULL DEFAULT '0' AFTER `cf_cert_kcp_cd` ",
-        true
-    );
-    sql_query(
-        " ALTER TABLE `{$g5['member_table']}`
-                    CHANGE `mb_hp_certify` `mb_certify` VARCHAR(20) NOT NULL DEFAULT '' ",
-        true
-    );
-    sql_query(" update {$g5['member_table']} set mb_certify = 'hp' where mb_certify = '1' ");
-    sql_query(" update {$g5['member_table']} set mb_certify = '' where mb_certify = '0' ");
-    sql_query(
-        " CREATE TABLE IF NOT EXISTS `{$g5['cert_history_table']}` (
-                  `cr_id` int(11) NOT NULL auto_increment,
-                  `mb_id` varchar(255) NOT NULL DEFAULT '',
-                  `cr_company` varchar(255) NOT NULL DEFAULT '',
-                  `cr_method` varchar(255) NOT NULL DEFAULT '',
-                  `cr_ip` varchar(255) NOT NULL DEFAULT '',
-                  `cr_date` date NOT NULL DEFAULT '0000-00-00',
-                  `cr_time` time NOT NULL DEFAULT '00:00:00',
-                  PRIMARY KEY (`cr_id`),
-                  KEY `mb_id` (`mb_id`)
-                )",
-        true
-    );
-}
-
-if (!isset($config['cf_analytics'])) {
-    sql_query(
-        " ALTER TABLE `{$g5['config_table']}`
-                    ADD `cf_analytics` TEXT NOT NULL AFTER `cf_intercept_ip` ",
-        true
-    );
-}
-
-if (!isset($config['cf_add_meta'])) {
-    sql_query(
-        " ALTER TABLE `{$g5['config_table']}`
-                    ADD `cf_add_meta` TEXT NOT NULL AFTER `cf_analytics` ",
-        true
-    );
-}
-
-if (!isset($config['cf_syndi_token'])) {
-    sql_query(
-        " ALTER TABLE `{$g5['config_table']}`
-                    ADD `cf_syndi_token` VARCHAR(255) NOT NULL AFTER `cf_add_meta` ",
-        true
-    );
-}
-
-if (!isset($config['cf_syndi_except'])) {
-    sql_query(
-        " ALTER TABLE `{$g5['config_table']}`
-                    ADD `cf_syndi_except` TEXT NOT NULL AFTER `cf_syndi_token` ",
-        true
-    );
-}
-
-if (!isset($config['cf_sms_use'])) {
-    sql_query(
-        " ALTER TABLE `{$g5['config_table']}`
-                    ADD `cf_sms_use` varchar(255) NOT NULL DEFAULT '' AFTER `cf_cert_limit`,
-                    ADD `cf_icode_id` varchar(255) NOT NULL DEFAULT '' AFTER `cf_sms_use`,
-                    ADD `cf_icode_pw` varchar(255) NOT NULL DEFAULT '' AFTER `cf_icode_id`,
-                    ADD `cf_icode_server_ip` varchar(255) NOT NULL DEFAULT '' AFTER `cf_icode_pw`,
-                    ADD `cf_icode_server_port` varchar(255) NOT NULL DEFAULT '' AFTER `cf_icode_server_ip` ",
-        true
-    );
-}
-
-if (!isset($config['cf_mobile_page_rows'])) {
-    sql_query(
-        " ALTER TABLE `{$g5['config_table']}`
-                    ADD `cf_mobile_page_rows` int(11) NOT NULL DEFAULT '0' AFTER `cf_page_rows` ",
-        true
-    );
-}
-
-if (!isset($config['cf_cert_req'])) {
-    sql_query(
-        " ALTER TABLE `{$g5['config_table']}`
-                    ADD `cf_cert_req` tinyint(4) NOT NULL DEFAULT '0' AFTER `cf_cert_limit` ",
-        true
-    );
-}
-
-if (!isset($config['cf_faq_skin'])) {
-    sql_query(
-        " ALTER TABLE `{$g5['config_table']}`
-                    ADD `cf_faq_skin` varchar(255) NOT NULL DEFAULT '' AFTER `cf_connect_skin`,
-                    ADD `cf_mobile_faq_skin` varchar(255) NOT NULL DEFAULT '' AFTER `cf_mobile_connect_skin` ",
-        true
-    );
-}
-
-// LG유플러스 본인확인 필드 추가
-if (!isset($config['cf_lg_mid'])) {
-    sql_query(
-        " ALTER TABLE `{$g5['config_table']}`
-                    ADD `cf_lg_mid` varchar(255) NOT NULL DEFAULT '' AFTER `cf_cert_kcp_cd`,
-                    ADD `cf_lg_mert_key` varchar(255) NOT NULL DEFAULT '' AFTER `cf_lg_mid` ",
-        true
-    );
-}
-
-if (!isset($config['cf_optimize_date'])) {
-    sql_query(
-        " ALTER TABLE `{$g5['config_table']}`
-                    ADD `cf_optimize_date` date NOT NULL default '0000-00-00' AFTER `cf_popular_del` ",
-        true
-    );
-}
-
-// 카카오톡링크 api 키
-if (!isset($config['cf_kakao_js_apikey'])) {
-    sql_query(
-        " ALTER TABLE `{$g5['config_table']}`
-                    ADD `cf_kakao_js_apikey` varchar(255) NOT NULL DEFAULT '' AFTER `cf_googl_shorturl_apikey` ",
-        true
-    );
-}
-
-// SMS 전송유형 필드 추가
-if (!isset($config['cf_sms_type'])) {
-    sql_query(
-        " ALTER TABLE `{$g5['config_table']}`
-                    ADD `cf_sms_type` varchar(10) NOT NULL DEFAULT '' AFTER `cf_sms_use` ",
-        true
-    );
-}
-
-// 접속자 정보 필드 추가
-if (!sql_query(" select vi_browser from {$g5['visit_table']} limit 1 ")) {
-    sql_query(
-        " ALTER TABLE `{$g5['visit_table']}`
-                    ADD `vi_browser` varchar(255) NOT NULL DEFAULT '' AFTER `vi_agent`,
-                    ADD `vi_os` varchar(255) NOT NULL DEFAULT '' AFTER `vi_browser`,
-                    ADD `vi_device` varchar(255) NOT NULL DEFAULT '' AFTER `vi_os` ",
-        true
-    );
-}
-
-//소셜 로그인 관련 필드 및 구글 리챕챠 필드 추가
-if (!isset($config['cf_social_login_use'])) {
-    sql_query(
-        "ALTER TABLE `{$g5['config_table']}`
-                ADD `cf_social_login_use` tinyint(4) NOT NULL DEFAULT '0' AFTER `cf_googl_shorturl_apikey`,
-                ADD `cf_google_clientid` varchar(100) NOT NULL DEFAULT '' AFTER `cf_twitter_secret`,
-                ADD `cf_google_secret` varchar(100) NOT NULL DEFAULT '' AFTER `cf_google_clientid`,
-                ADD `cf_naver_clientid` varchar(100) NOT NULL DEFAULT '' AFTER `cf_google_secret`,
-                ADD `cf_naver_secret` varchar(100) NOT NULL DEFAULT '' AFTER `cf_naver_clientid`,
-                ADD `cf_kakao_rest_key` varchar(100) NOT NULL DEFAULT '' AFTER `cf_naver_secret`,
-                ADD `cf_social_servicelist` varchar(255) NOT NULL DEFAULT '' AFTER `cf_social_login_use`,
-                ADD `cf_payco_clientid` varchar(100) NOT NULL DEFAULT '' AFTER `cf_social_servicelist`,
-                ADD `cf_payco_secret` varchar(100) NOT NULL DEFAULT '' AFTER `cf_payco_clientid`,
-                ADD `cf_captcha` varchar(100) NOT NULL DEFAULT '' AFTER `cf_kakao_js_apikey`,
-                ADD `cf_recaptcha_site_key` varchar(100) NOT NULL DEFAULT '' AFTER `cf_captcha`,
-                ADD `cf_recaptcha_secret_key` varchar(100) NOT NULL DEFAULT '' AFTER `cf_recaptcha_site_key`
-    ",
-        true
-    );
-}
-
-//소셜 로그인 관련 필드 카카오 클라이언트 시크릿 추가
-if (!isset($config['cf_kakao_client_secret'])) {
-    sql_query(
-        "ALTER TABLE `{$g5['config_table']}`
-                ADD `cf_kakao_client_secret` varchar(100) NOT NULL DEFAULT '' AFTER `cf_kakao_rest_key`
-    ",
-        true
-    );
-}
-
-// 회원 이미지 관련 필드 추가
-if (!isset($config['cf_member_img_size'])) {
-    sql_query(
-        "ALTER TABLE `{$g5['config_table']}`
-                ADD `cf_member_img_size` int(11) NOT NULL DEFAULT '0' AFTER `cf_member_icon_height`,
-                ADD `cf_member_img_width` int(11) NOT NULL DEFAULT '0' AFTER `cf_member_img_size`,
-                ADD `cf_member_img_height` int(11) NOT NULL DEFAULT '0' AFTER `cf_member_img_width`
-    ",
-        true
-    );
-
-    $sql = " update {$g5['config_table']} set cf_member_img_size = 50000, cf_member_img_width = 60, cf_member_img_height = 60 ";
-    sql_query($sql, false);
-
-    $config['cf_member_img_size'] = 50000;
-    $config['cf_member_img_width'] = 60;
-    $config['cf_member_img_height'] = 60;
-}
-
-// 소셜 로그인 관리 테이블 없을 경우 생성
-if (!sql_query(" DESC {$g5['social_profile_table']} ", false)) {
-    sql_query(
-        " CREATE TABLE IF NOT EXISTS `{$g5['social_profile_table']}` (
-                  `mp_no` int(11) NOT NULL AUTO_INCREMENT,
-                  `mb_id` varchar(255) NOT NULL DEFAULT '',
-                  `provider` varchar(50) NOT NULL DEFAULT '',
-                  `object_sha` varchar(45) NOT NULL DEFAULT '',
-                  `identifier` varchar(255) NOT NULL DEFAULT '',
-                  `profileurl` varchar(255) NOT NULL DEFAULT '',
-                  `photourl` varchar(255) NOT NULL DEFAULT '',
-                  `displayname` varchar(150) NOT NULL DEFAULT '',
-                  `description` varchar(255) NOT NULL DEFAULT '',
-                  `mp_register_day` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
-                  `mp_latest_day` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
-                  UNIQUE KEY `mp_no` (`mp_no`),
-                  KEY `mb_id` (`mb_id`),
-                  KEY `provider` (`provider`)
-                ) ",
-        true
-    );
-}
-
-// 짧은 URL 주소를 사용 여부 필드 추가
-if (!isset($config['cf_bbs_rewrite'])) {
-    sql_query(
-        " ALTER TABLE `{$g5['config_table']}`
-                    ADD `cf_bbs_rewrite` tinyint(4) NOT NULL DEFAULT '0' AFTER `cf_link_target` ",
-        true
-    );
-}
-
-// 읽지 않은 메모 수 칼럼 추가
-if (!isset($member['mb_memo_cnt'])) {
-    sql_query(
-        " ALTER TABLE `{$g5['member_table']}`
-                ADD `mb_memo_cnt` int(11) NOT NULL DEFAULT '0' AFTER `mb_memo_call`",
-        true
-    );
-}
-
-// 스크랩 읽은 수 추가
-if (!isset($member['mb_scrap_cnt'])) {
-    sql_query(
-        " ALTER TABLE `{$g5['member_table']}`
-                ADD `mb_scrap_cnt` int(11) NOT NULL DEFAULT '0' AFTER `mb_memo_cnt`",
-        true
-    );
-}
-
-// 아이코드 토큰키 추가
-if (!isset($config['cf_icode_token_key'])) {
-    $sql = "ALTER TABLE `{$g5['config_table']}` 
-            ADD COLUMN `cf_icode_token_key` VARCHAR(100) NOT NULL DEFAULT '' AFTER `cf_icode_server_port`; ";
-    sql_query($sql, false);
-}
-// 아이디/비밀번호 찾기에 본인확인 사용 여부 필드 추가
-if (!isset($config['cf_cert_find'])) {
-    $sql = "ALTER TABLE `{$g5['config_table']}` 
-            ADD COLUMN `cf_cert_find` TINYINT(4) NOT NULL DEFAULT '0' AFTER `cf_cert_use`; ";
-    sql_query($sql, false);
-}
-// 간편인증 필드 추가
-if (!isset($config['cf_cert_simple'])) {
-    $sql = "ALTER TABLE `{$g5['config_table']}` 
-            ADD COLUMN `cf_cert_simple` VARCHAR(255) NOT NULL DEFAULT '' AFTER `cf_cert_hp`; ";
-    sql_query($sql, false);
-}
-if (!isset($config['cf_cert_kg_cd'])) {
-    $sql = "ALTER TABLE `{$g5['config_table']}`
-            ADD COLUMN `cf_cert_kg_cd` VARCHAR(255) NOT NULL DEFAULT '' AFTER `cf_cert_simple`; ";
-    sql_query($sql, false);
-}
-if (!isset($config['cf_cert_kg_mid'])) {
-    $sql = "ALTER TABLE `{$g5['config_table']}`
-            ADD COLUMN `cf_cert_kg_mid` VARCHAR(255) NOT NULL DEFAULT '' AFTER `cf_cert_kg_cd`; ";
-    sql_query($sql, false);
+if (!isset($config['cf_email_certify_minutes'])) {
+    alert('DB 업그레이드가 필요합니다.', G5_ADMIN_URL . '/dbupgrade.php');
 }
 if (!$config['cf_faq_skin']) {
     $config['cf_faq_skin'] = "basic";
@@ -699,14 +307,14 @@ if ($config['cf_sms_use'] && $config['cf_icode_id'] && $config['cf_icode_pw']) {
                         <th scope="row"><label for="cf_analytics">방문자분석 스크립트</label></th>
                         <td colspan="3">
                             <?php echo help('방문자분석 스크립트 코드를 입력합니다. 예) 구글 애널리틱스<br>관리자 페이지에서는 이 코드를 사용하지 않습니다.'); ?>
-                            <textarea name="cf_analytics" id="cf_analytics"><?php echo get_text($copy_config['cf_analytics']); ?></textarea>
+                            <textarea name="cf_analytics" id="cf_analytics"><?php echo get_text($config['cf_analytics']); ?></textarea>
                         </td>
                     </tr>
                     <tr>
                         <th scope="row"><label for="cf_add_meta">추가 메타태그</label></th>
                         <td colspan="3">
                             <?php echo help('추가로 사용하실 meta 태그를 입력합니다.<br>관리자 페이지에서는 이 코드를 사용하지 않습니다.'); ?>
-                            <textarea name="cf_add_meta" id="cf_add_meta"><?php echo get_text($copy_config['cf_add_meta']); ?></textarea>
+                            <textarea name="cf_add_meta" id="cf_add_meta"><?php echo get_text($config['cf_add_meta']); ?></textarea>
                         </td>
                     </tr>
                     <tr>
@@ -948,6 +556,17 @@ if ($config['cf_sms_use'] && $config['cf_icode_id'] && $config['cf_icode_pw']) {
                         <th scope="row"><label for="cf_privacy">개인정보처리방침</label></th>
                         <td colspan="3"><textarea id="cf_privacy" name="cf_privacy" rows="10"><?php echo html_purifier($config['cf_privacy']); ?></textarea></td>
                     </tr>
+                    <tr>
+                        <th scope="row"><label for="cf_use_promotion">회원가입 약관 동의에<br>광고성 정보 수신 동의 표시 여부</label></th>
+                        <td colspan="3">
+                            <?php echo help('<b>광고성 정보 수신 · 마케팅 목적의 개인정보 수집 및 이용 · 개인정보 제 3자 제공</b> 여부를 설정합니다. <b>SMS 또는 카카오톡</b> 사용 시 <b>개인정보 제3자 제공</b>이 활성화됩니다.'); ?>
+                            <?php echo help('동의한 회원에게 <b>카카오톡(친구톡)·문자</b>로 광고성 메시지를 발송할 수 있습니다.'); ?>
+                            <?php echo help('<b>휴대전화번호</b> 사용을 위해서는 <b>기본환경설정 > 회원가입 > 휴대전화번호 입력</b>을 <b>[보이기]</b> 또는 <b>[필수입력]</b>으로 설정해야 하며, 미설정 시 수집이 불가합니다.'); ?>
+                            <?php echo help('* 「정보통신망이용촉진및정보보호등에관한법률」에 따라 <b>광고성 정보 수신 동의</b>를 매 2년마다 반드시 확인해야 합니다.'); ?>
+                            <input type="checkbox" name="cf_use_promotion" value="1" id="cf_use_promotion" <?php echo $config['cf_use_promotion'] ? 'checked' : ''; ?>> 
+                            <label for="cf_use_promotion">사용</label>
+                        </td>
+                    </tr>
                 </tbody>
             </table>
         </div>
@@ -1002,13 +621,40 @@ if ($config['cf_sms_use'] && $config['cf_icode_id'] && $config['cf_icode_pw']) {
                         </td>
                     </tr>
                     <tr>
+                        <th scope="row" class="cf_cert_service"><label for="cf_cert_use_seed">통합인증 암호화 적용</label></th>
+                        <td class="cf_cert_service">
+                            <?php echo help('KG이니시스 통합인증서비스에 암호화를 적용합니다. 만일 글자가 깨지는 문제가 발생하면 사용안함으로 적용해 주세요.') ?>
+                            <select name="cf_cert_use_seed" id="cf_cert_use_seed">
+                                <?php echo option_selected("0", $config['cf_cert_use_seed'], "사용안함"); ?>
+                                <?php echo option_selected("1", $config['cf_cert_use_seed'], "사용함"); ?>
+                            </select>
+                        </td>
+                    </tr>
+                    <tr>
                         <th scope="row" class="cf_cert_service"><label for="cf_cert_hp">휴대폰 본인확인</label></th>
                         <td class="cf_cert_service">
                             <select name="cf_cert_hp" id="cf_cert_hp">
                                 <?php echo option_selected("", $config['cf_cert_hp'], "사용안함"); ?>
                                 <?php echo option_selected("kcb", $config['cf_cert_hp'], "코리아크레딧뷰로(KCB) 휴대폰 본인확인"); ?>
                                 <?php echo option_selected("kcp", $config['cf_cert_hp'], "NHN KCP 휴대폰 본인확인"); ?>
+                                <?php echo option_selected("kcp_v2", $config['cf_cert_hp'], "NHN KCP 휴대폰 본인확인(api_v2)"); ?>
                             </select>
+                            <div id="cf_cert_hp_kcp_v2_notice" style="display:<?php echo ($config['cf_cert_hp'] == 'kcp_v2') ? 'block' : 'none'; ?>; margin-top:8px; padding:10px 12px; background:#fff8e1; border:1px solid #ffd54f; border-radius:4px; color:#5d4037; line-height:1.5;">
+                                <strong>NHN KCP 휴대폰 본인확인(api_v2)</strong> 사용 시,<br>
+                                NHN KCP 상점관리자 &gt; 부가서비스 &gt; 휴대폰본인확인 &gt; 연동방식 설정 에서 <strong>신규 연동방식(V2) 사용여부를 &lsquo;사용&rsquo;</strong> 으로 변경해야 정상 동작합니다.<br>
+                                PHP 7.0 이상 환경에서만 동작하며, PHP 7.0 미만에서는 사용할 수 없습니다.
+                            </div>
+                            <script>
+                            jQuery(function($){
+                                function toggle_kcp_v2_notice() {
+                                    var is_kcp_v2 = $('#cf_cert_hp').val() === 'kcp_v2';
+                                    $('#cf_cert_hp_kcp_v2_notice').toggle(is_kcp_v2);
+                                }
+
+                                $('#cf_cert_hp').on('change', toggle_kcp_v2_notice);
+                                toggle_kcp_v2_notice();
+                            });
+                            </script>
                         </td>
                     </tr>
                     <tr>
@@ -1044,9 +690,22 @@ if ($config['cf_sms_use'] && $config['cf_icode_id'] && $config['cf_icode_pw']) {
                     <tr>
                         <th scope="row" class="cf_cert_service"><label for="cf_cert_kcp_cd">NHN KCP 사이트코드</label></th>
                         <td class="cf_cert_service">
+                            <?php
+                            $cf_cert_kcp_cd = get_sanitize_input($config['cf_cert_kcp_cd']);
+                            if (preg_match('/^SM([A-Z0-9]{3})$/i', $cf_cert_kcp_cd, $matches)) {
+                                $cf_cert_kcp_cd = $matches[1];
+                            }
+                            ?>
                             <?php echo help('SM으로 시작하는 5자리 사이트 코드중 뒤의 3자리만 입력해 주십시오.<br>서비스에 가입되어 있지 않다면, 본인확인 서비스 신청페이지에서 서비스 신청 후 사이트코드를 발급 받으실 수 있습니다.') ?>
-                            <span class="sitecode">SM</span>
-                            <input type="text" name="cf_cert_kcp_cd" value="<?php echo get_sanitize_input($config['cf_cert_kcp_cd']); ?>" id="cf_cert_kcp_cd" class="frm_input" size="3"> <a href="http://sir.kr/main/service/p_cert.php" target="_blank" class="btn_frmline">NHN KCP 휴대폰 본인확인 서비스 신청페이지</a>
+                            <span class="sitecode" id="cf_cert_kcp_cd_prefix">SM</span>
+                            <input type="text" name="cf_cert_kcp_cd" value="<?php echo $cf_cert_kcp_cd; ?>" id="cf_cert_kcp_cd" class="frm_input" size="3" maxlength="3"> <a href="http://sir.kr/main/service/p_cert.php" target="_blank" class="btn_frmline">NHN KCP 휴대폰 본인확인 서비스 신청페이지</a>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row" class="cf_cert_service"><label for="cf_cert_kcp_enckey">NHN KCP 가맹점 인증키</label></th>
+                        <td class="cf_cert_service">
+                            <?php echo help('NHN KCP 상점관리자 > 기술관리센터 > 인증센터 > 가맹점 인증키관리 에서 인증키를 발급받아 입력해 주십시오.<br>NHN KCP 휴대폰 본인확인(api_v2)도 이 인증키 값을 사용합니다.') ?>
+                            <input type="text" name="cf_cert_kcp_enckey" value="<?php echo get_sanitize_input($config['cf_cert_kcp_enckey']); ?>" id="cf_cert_kcp_enckey" class="frm_input" maxlength="100" size="70"> <a href="https://partner.kcp.co.kr" target="_blank" class="btn_frmline">NHN KCP 상점관리자</a>
                         </td>
                     </tr>
                     <tr>
@@ -1100,12 +759,20 @@ if ($config['cf_sms_use'] && $config['cf_icode_id'] && $config['cf_icode_pw']) {
                         </td>
                     </tr>
                     <tr>
+                        <th scope="row"><label for="cf_email_certify_minutes">메일인증 유효시간</label></th>
+                        <td>
+                            <?php echo help('인증메일 발송 후 링크를 사용할 수 있는 시간을 분 단위로 설정합니다. 0은 만료시간과 미인증 만료 정리를 적용하지 않습니다.<br>만료된 미인증 회원은 최고관리자 접속 시 하루 한 번 실행되는 정리에서 탈퇴 처리하며, 본인확인 정보와 소셜 연결을 해제합니다. 나머지 회원자료는 회원탈퇴후 삭제일 설정에 따라 정리합니다.') ?>
+                            <input type="number" name="cf_email_certify_minutes" value="<?php echo isset($config['cf_email_certify_minutes']) ? (int) $config['cf_email_certify_minutes'] : 60; ?>" id="cf_email_certify_minutes" class="frm_input" min="0"> 분
+                        </td>
+                    </tr>
+                    <tr>
                         <th scope="row"><label for="cf_formmail_is_member">폼메일 사용 여부</label></th>
                         <td>
                             <?php echo help('체크하지 않으면 비회원도 사용 할 수 있습니다.') ?>
                             <input type="checkbox" name="cf_formmail_is_member" value="1" id="cf_formmail_is_member" <?php echo $config['cf_formmail_is_member'] ? 'checked' : ''; ?>> 회원만 사용
                         </td>
                     </tr>
+                </tbody>
             </table>
         </div>
     </section>
@@ -1318,7 +985,7 @@ if ($config['cf_sms_use'] && $config['cf_icode_id'] && $config['cf_icode_pw']) {
                     <tr>
                         <th scope="row"><label for="cf_twitter_key">트위터 컨슈머 Key</label></th>
                         <td>
-                            <input type="text" name="cf_twitter_key" value="<?php echo get_sanitize_input($config['cf_twitter_key']); ?>" id="cf_twitter_key" class="frm_input" size="40"> <a href="https://developer.twitter.com/en/apps" target="_blank" class="btn_frmline">앱 등록하기</a>
+                            <input type="text" name="cf_twitter_key" value="<?php echo get_sanitize_input($config['cf_twitter_key']); ?>" id="cf_twitter_key" class="frm_input" size="40"> <a href="https://console.x.com/" target="_blank" class="btn_frmline">앱 등록하기</a>
                         </td>
                         <th scope="row"><label for="cf_twitter_secret">트위터 컨슈머 Secret</label></th>
                         <td>
@@ -1328,7 +995,7 @@ if ($config['cf_sms_use'] && $config['cf_icode_id'] && $config['cf_icode_pw']) {
                     <tr>
                         <th scope="row"><label for="cf_google_clientid">구글 Client ID</label></th>
                         <td>
-                            <input type="text" name="cf_google_clientid" value="<?php echo get_sanitize_input($config['cf_google_clientid']); ?>" id="cf_google_clientid" class="frm_input" size="40"> <a href="https://console.developers.google.com" target="_blank" class="btn_frmline">앱 등록하기</a>
+                            <input type="text" name="cf_google_clientid" value="<?php echo get_sanitize_input($config['cf_google_clientid']); ?>" id="cf_google_clientid" class="frm_input" size="40"> <a href="https://console.cloud.google.com/auth/clients" target="_blank" class="btn_frmline">앱 등록하기</a>
                         </td>
                         <th scope="row"><label for="cf_google_secret">구글 Client Secret</label></th>
                         <td>
@@ -1344,7 +1011,7 @@ if ($config['cf_sms_use'] && $config['cf_icode_id'] && $config['cf_icode_pw']) {
                     <tr>
                         <th scope="row"><label for="cf_kakao_rest_key">카카오 REST API 키</label></th>
                         <td>
-                            <input type="text" name="cf_kakao_rest_key" value="<?php echo get_sanitize_input($config['cf_kakao_rest_key']); ?>" id="cf_kakao_rest_key" class="frm_input" size="40"> <a href="https://developers.kakao.com/product/kakaoLogin" target="_blank" class="btn_frmline">앱 등록하기</a>
+                            <input type="text" name="cf_kakao_rest_key" value="<?php echo get_sanitize_input($config['cf_kakao_rest_key']); ?>" id="cf_kakao_rest_key" class="frm_input" size="40"> <a href="https://developers.kakao.com/console/app" target="_blank" class="btn_frmline">앱 등록하기</a>
                         </td>
                         <th scope="row"><label for="cf_kakao_client_secret">카카오 Client Secret</label></th>
                         <td>
@@ -1360,7 +1027,7 @@ if ($config['cf_sms_use'] && $config['cf_icode_id'] && $config['cf_icode_pw']) {
                     <tr>
                         <th scope="row"><label for="cf_payco_clientid">페이코 Client ID</label></th>
                         <td>
-                            <input type="text" name="cf_payco_clientid" value="<?php echo get_sanitize_input($config['cf_payco_clientid']); ?>" id="cf_payco_clientid" class="frm_input" size="40"> <a href="https://developers.payco.com/guide" target="_blank" class="btn_frmline">앱 등록하기</a>
+                            <input type="text" name="cf_payco_clientid" value="<?php echo get_sanitize_input($config['cf_payco_clientid']); ?>" id="cf_payco_clientid" class="frm_input" size="40"> <a href="https://developers.payco.com/application/registView" target="_blank" class="btn_frmline">앱 등록하기</a>
                         </td>
                         <th scope="row"><label for="cf_payco_secret">페이코 Secret</label></th>
                         <td>
@@ -1392,7 +1059,7 @@ if ($config['cf_sms_use'] && $config['cf_icode_id'] && $config['cf_icode_pw']) {
                         <th scope="row"><label for="cf_add_script">추가 script, css</label></th>
                         <td>
                             <?php echo help('HTML의 &lt;/HEAD&gt; 태그위로 추가될 JavaScript와 css 코드를 설정합니다.<br>관리자 페이지에서는 이 코드를 사용하지 않습니다.') ?>
-                            <textarea name="cf_add_script" id="cf_add_script"><?php echo get_text($copy_config['cf_add_script']); ?></textarea>
+                            <textarea name="cf_add_script" id="cf_add_script"><?php echo get_text($config['cf_add_script']); ?></textarea>
                         </td>
                     </tr>
                 </tbody>
@@ -1494,7 +1161,6 @@ if ($config['cf_sms_use'] && $config['cf_icode_id'] && $config['cf_icode_pw']) {
         </div>
     </section>
 
-
     <section id="anc_cf_extra">
         <h2 class="h2_frm">여분필드 기본 설정</h2>
         <?php echo $pg_anchor ?>
@@ -1525,8 +1191,25 @@ if ($config['cf_sms_use'] && $config['cf_icode_id'] && $config['cf_icode_pw']) {
             </table>
         </div>
     </section>
+    
+    <style>
+    .btn_fixed_top.btn_confirm {display:flex;align-items:flex-start;gap:8px;z-index:1001}
+    #config_captcha_wrap {max-width:calc(100vw - 40px);padding:10px 12px;border:1px solid #c5cbd5;border-radius:3px;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,0.15);text-align:left}
+    #config_captcha_wrap h2 {margin:0 0 6px;padding:0;font-size:1em;line-height:1.2;color:#3a3a3a}
+    #config_captcha_wrap #mp_captcha_tooltip {margin:6px 0 0;color:#e8180c}
+    </style>
 
     <div class="btn_fixed_top btn_confirm">
+        <div id="config_captcha_wrap" style="display:none">
+            <h2>캡챠입력</h2>
+            <?php
+            require_once G5_CAPTCHA_PATH . '/captcha.lib.php';
+            $captcha_html = captcha_html();
+            $captcha_js   = chk_captcha_js();
+            echo $captcha_html;
+            ?>
+        </div>
+
         <input type="submit" value="확인" class="btn_submit btn" accesskey="s">
     </div>
 
@@ -1597,10 +1280,63 @@ if ($config['cf_sms_use'] && $config['cf_icode_id'] && $config['cf_icode_pw']) {
         });
     });
 
+    // 각 요소의 초기값 저장
+    var initialValues = {
+        cf_admin: $('#cf_admin').val(),
+        cf_analytics: $('#cf_analytics').val(),
+        cf_add_meta: $('#cf_add_meta').val(),
+        cf_add_script: $('#cf_add_script').val()
+    };
+
+    function check_config_captcha_open() {
+        var isChanged = false;
+
+        // 현재 값이 있는 경우에만 변경 여부 체크
+        if ($('#cf_admin').val()) {
+            isChanged = isChanged || $('#cf_admin').val() !== initialValues.cf_admin;
+        }
+        if ($('#cf_analytics').val()) {
+            isChanged = isChanged || $('#cf_analytics').val() !== initialValues.cf_analytics;
+        }
+        if ($('#cf_add_meta').val()) {
+            isChanged = isChanged || $('#cf_add_meta').val() !== initialValues.cf_add_meta;
+        }
+        if ($('#cf_add_script').val()) {
+            isChanged = isChanged || $('#cf_add_script').val() !== initialValues.cf_add_script;
+        }
+        
+        var $wrap = $("#config_captcha_wrap"),
+            tooptipid = "mp_captcha_tooltip",
+            $p_text = $("<p>", {id:tooptipid, style:"font-size:0.95em;letter-spacing:-0.1em"}).html("중요정보를 수정할 경우 캡챠를 입력해야 합니다."),
+            $children = $wrap.children(':first'),
+            is_invisible_recaptcha = $("#captcha").hasClass("invisible_recaptcha");
+
+        if(isChanged){
+            $wrap.show();
+            if(! is_invisible_recaptcha) {
+                if(! $("#"+tooptipid).length){ $children.after($p_text) }
+            }
+        } else {
+            $wrap.hide();
+            if($("#"+tooptipid).length && ! is_invisible_recaptcha){ $children.next("#"+tooptipid).remove(); }
+        }
+        
+        return isChanged;
+    }
+        
     function fconfigform_submit(f) {
         var current_user_ip = "<?php echo $_SERVER['REMOTE_ADDR']; ?>";
         var cf_intercept_ip_val = f.cf_intercept_ip.value;
+        
+        if (check_config_captcha_open()){
+            // 캡챠는 확인 버튼 옆에 고정 노출되므로 별도 이동 없이 입력란으로 포커스만 옮긴다.
+            if (jQuery("#captcha_key").is(":visible")) {
+                jQuery("#captcha_key").focus();
+            }
 
+            <?php echo $captcha_js; // 캡챠 사용시 자바스크립트에서 입력된 캡챠를 검사함 ?>
+        }
+        
         if (cf_intercept_ip_val && current_user_ip) {
             var cf_intercept_ips = cf_intercept_ip_val.split("\n");
 
@@ -1621,6 +1357,22 @@ if ($config['cf_sms_use'] && $config['cf_icode_id'] && $config['cf_icode_pw']) {
         f.action = "./config_form_update.php";
         return true;
     }
+    
+    jQuery(function($){
+        $("#captcha_key").prop('required', false).removeAttr("required").removeClass("required");
+        
+        // 최고관리자 변경시
+        $(document).on('change', '#cf_admin', check_config_captcha_open);
+
+        // 방문자분석 스크립트 변경시
+        $(document).on('input', '#cf_analytics', check_config_captcha_open);
+        
+        // 추가 메타태그 변경시
+        $(document).on('input', '#cf_add_meta', check_config_captcha_open);
+        
+        // 추가 script, css 변경시
+        $(document).on('input', '#cf_add_script', check_config_captcha_open);
+    });
 </script>
 
 <?php
@@ -1652,16 +1404,19 @@ if ($config['cf_cert_use']) {
 
     // kcp일 때
     if ($config['cf_cert_hp'] == 'kcp') {
+        
+        $bin_path = ((int)$config['cf_cert_use'] === 2 && !$config['cf_cert_kcp_enckey']) ? 'bin_old' : 'bin';
+        
         if (strtoupper(substr(PHP_OS, 0, 3)) !== 'WIN') {
             if (PHP_INT_MAX == 2147483647) { // 32-bit
-                $exe = G5_KCPCERT_PATH . '/bin/ct_cli';
+                $exe = G5_KCPCERT_PATH . '/'.$bin_path.'/ct_cli';
             } else {
-                $exe = G5_KCPCERT_PATH . '/bin/ct_cli_x64';
+                $exe = G5_KCPCERT_PATH . '/'.$bin_path.'/ct_cli_x64';
             }
         } else {
-            $exe = G5_KCPCERT_PATH . '/bin/ct_cli_exe.exe';
+            $exe = G5_KCPCERT_PATH . '/'.$bin_path.'/ct_cli_exe.exe';
         }
-
+        
         echo module_exec_check($exe, 'ct_cli');
     }
 

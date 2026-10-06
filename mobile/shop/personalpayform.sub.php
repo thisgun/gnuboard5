@@ -1,5 +1,6 @@
 <?php
 if (!defined('_GNUBOARD_')) exit; // 개별 페이지 접근 불가
+include_once(G5_LIB_PATH.'/shop_order_access.lib.php');
 
 require_once(G5_MSHOP_PATH.'/settle_'.$default['de_pg_service'].'.inc.php');
 
@@ -14,7 +15,9 @@ $tablet_size = "1.0"; // 화면 사이즈 조정 - 기기화면에 맞게 수정
 </div>
 
 <div id="m_pv_sod_frm">
+<script src="<?php echo G5_JS_URL; ?>/shop.order-state.js"></script>
     <form name="forderform" method="post" action="<?php echo $order_action_url; ?>" autocomplete="off">
+<?php echo shop_order_checkout_fields((string)$pp['pp_id'], true); ?>
     <input type="hidden" name="pp_id" value="<?php echo $pp['pp_id']; ?>">
     <section id="m_sod_frm_orderer">
         <h2>개인결제정보</h2>
@@ -53,8 +56,18 @@ $tablet_size = "1.0"; // 화면 사이즈 조정 - 기기화면에 맞게 수정
         $checked = '';
 
         $escrow_title = "";
+        $escrow_products = array(); // 토스페이먼츠 escrowProducts 배열 생성
         if ($default['de_escrow_use']) {
             $escrow_title = "에스크로 ";
+             
+            // 토스페이먼츠 escrowProducts 배열에 상품 정보 추가
+            $escrow_products[] = array(
+                'id'        => $pp['pp_id'],
+                'name'      => $pp['pp_name'].'님 개인결제',
+                'code'      => $pp['pp_id'],
+                'unitPrice' => (int) $pp['pp_price'],
+                'quantity'  => (int) 1
+            );  
         }
 
         if ($default['de_vbank_use'] || $default['de_iche_use'] || $default['de_card_use'] || $default['de_hp_use']) {
@@ -73,7 +86,7 @@ $tablet_size = "1.0"; // 화면 사이즈 조정 - 기기화면에 맞게 수정
         // 계좌이체 사용
         if ($default['de_iche_use']) {
             $multi_settle++;
-            echo '<li><input type="radio" id="pp_settle_iche" name="pp_settle_case" value="계좌이체" '.$checked.'> <label for="pp_settle_iche"><span></span>'.$escrow_title.'계좌이체</label></li>'.PHP_EOL;
+            echo '<li><input type="radio" id="pp_settle_iche" name="pp_settle_case" value="계좌이체" '.$checked.'> <label for="pp_settle_iche"><span></span>'.$escrow_title. ($default['de_pg_service'] == 'toss' ? '퀵계좌이체' :'계좌이체') . '</label></li>'.PHP_EOL;
             $checked = '';
         }
 
@@ -174,7 +187,53 @@ function pay_approval()
     <?php if($default['de_tax_flag_use']) { ?>
     f.LGD_TAXFREEAMOUNT.value = pf.comm_free_mny.value;
     <?php } ?>
+    <?php } else if($default['de_pg_service'] == 'toss') { ?>
+    var pay_method = "";
+    switch(settle_method) {
+        case "계좌이체":
+            pay_method = "TRANSFER";
+            break;
+        case "가상계좌":
+            pay_method = "VIRTUAL_ACCOUNT";
+            break;
+        case "휴대폰":
+            pay_method = "MOBILE_PHONE";
+            break;
+        case "신용카드":
+            pay_method = "CARD";
+            break;
+        case "간편결제":
+            pay_method = "CARD";
+            break;
+    }
+    f.method.value = pay_method;
+    f.orderId.value = '<?=$od_id?>';
+    f.orderName.value = '<?=$goods?>';
+
+    f.customerName.value = pf.pp_name.value;
+    f.customerEmail.value = pf.pp_email.value;
+    f.customerMobilePhone.value = pf.pp_hp.value.replace(/[^0-9]/g, '');
+
+    f.cardUseCardPoint.value = false;
+    f.cardUseAppCardOnly.value = false;
+
+    <?php if($default['de_escrow_use']) { ?>
+    f.cardUseEscrow.value = 'true';
+    f.escrowProducts.value = JSON.stringify(<?php echo json_encode($escrow_products, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>);
+    <?php } ?>
+
+    if(settle_method == "간편결제") {
+        f.cardflowMode.value = 'DIRECT';
+    }
+
+    f.amountCurrency.value = 'KRW';
+    f.amountValue.value = f.good_mny.value;
+    <?php if($default['de_tax_flag_use']) { ?>
+    f.taxFreeAmount.value = pf.comm_free_mny.value;
+    <?php } ?>
+    f.windowTarget.value = 'self';
     <?php } else if($default['de_pg_service'] == 'inicis') { ?>
+    <?php if (empty($inicis_pro_use)) { ?>
     var paymethod = "";
     var width = 330;
     var height = 480;
@@ -207,21 +266,70 @@ function pay_approval()
     f.P_RETURN_URL.value = "<?php echo $return_url.$pp_id; ?>";
     f.action = "https://mobile.inicis.com/smart/" + paymethod + "/";
     <?php } ?>
+    <?php } else if($default['de_pg_service'] == 'nicepay') { ?>
+
+    f.Amt.value       = f.good_mny.value;
+    f.BuyerName.value   = pf.pp_name.value;
+    f.BuyerEmail.value  = pf.pp_email.value;
+    f.BuyerTel.value    = pf.pp_hp.value;
+
+    f.DirectShowOpt.value = "";     // 간편결제 요청 값 초기화
+    f.DirectEasyPay.value = "";     // 간편결제 요청 값 초기화
+    f.NicepayReserved.value = "";   // 간편결제 요청 값 초기화
+    f.EasyPayMethod.value = "";   // 간편결제 요청 값 초기화
+
+        <?php if ($default['de_escrow_use']) {  // 간편결제시 에스크로값이 0이 되므로 기본설정값을 지정 ?>
+        f.TransType.value = "1";
+        <?php } ?>
+
+    switch(settle_method) {
+        case "계좌이체":
+            paymethod = "BANK";
+            break;
+        case "가상계좌":
+            paymethod = "VBANK";
+            break;
+        case "휴대폰":
+            paymethod = "CELLPHONE";
+            break;
+        case "신용카드":
+            paymethod = "CARD";
+            break;
+        default:
+            paymethod = "무통장";
+            break;
+    }
+    
+    f.PayMethod.value = paymethod;
+
+    <?php if($default['de_tax_flag_use']) { ?>
+    f.SupplyAmt.value = pf.comm_tax_mny.value;
+    f.GoodsVat.value = pf.comm_vat_mny.value;
+    f.TaxFreeAmt.value = pf.comm_free_mny.value;
+    <?php } ?>
+
+    <?php } ?>
 
     //var new_win = window.open("about:blank", "tar_opener", "scrollbars=yes,resizable=yes");
     //f.target = "tar_opener";
 
     // 주문 정보 임시저장
-    var order_data = $(pf).serialize();
-    var save_result = "";
+    <?php if ($default['de_pg_service'] == 'toss') { ?>
+            // 복귀 페이지에서 요청값으로 덮어쓰지 않도록 PG 필드를 임시 저장 전에 동기화한다.
+            $(f).serializeArray().forEach(function(field) {
+                if (pf.elements[field.name]) pf.elements[field.name].value = field.value;
+            });
+            <?php } ?>
+            var order_data = $(pf).serialize();
+    var save_result = "결제 요청을 저장하지 못했습니다.";
     $.ajax({
         type: "POST",
         data: order_data,
         url: g5_url+"/shop/ajax.orderdatasave.php",
         cache: false,
         async: false,
-        success: function(data) {
-            save_result = data;
+        success: function(data, textStatus, xhr) {
+            save_result = data || g5_order_state_accept(xhr);
         }
     });
 
@@ -230,6 +338,21 @@ function pay_approval()
         return false;
     }
 
+    <?php if ($default['de_pg_service'] == 'inicis' && !empty($inicis_pro_use)) { ?>
+    return inicis_pro_pay("<?php echo $od_id; ?>", "MOBILE");
+    <?php } else if ($default['de_pg_service'] == 'inicis') { ?>
+    if (!inicis_mobile_signature(f)) return false;
+    <?php } ?>
+    
+    <?php if($default['de_pg_service'] == 'nicepay') { ?>
+        if (! nicepay_create_signdata(f)) {
+            return false;
+        }
+
+        nicepayStart(f);
+
+        return;
+    <?php } ?>
     f.submit();
 }
 

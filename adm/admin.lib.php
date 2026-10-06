@@ -281,7 +281,7 @@ function auth_check($auth, $attr, $return = false)
 
     $attr = strtolower($attr);
 
-    if (!strstr($auth, $attr)) {
+    if (strpos($auth, $attr) === false) {
         if ($attr == 'r') {
             $msg = '읽을 권한이 없습니다.';
             if ($return) {
@@ -389,7 +389,7 @@ function order_select($fld, $sel = '')
 // 불법접근을 막도록 토큰을 생성하면서 토큰값을 리턴
 function get_admin_token()
 {
-    $token = md5(uniqid(rand(), true));
+    $token = get_random_token_string(16);
     set_session('ss_admin_token', $token);
 
     return $token;
@@ -478,6 +478,30 @@ function check_log_folder($log_path, $is_delete = true)
     }
 }
 
+// 회원 본인확인 식별값과 인증 이력만 정리한다. 호출부에서 관리자 권한을 검증한다.
+function admin_clear_member_certification($mb_id)
+{
+    global $g5;
+
+    $esc_mb_id = sql_real_escape_string($mb_id);
+    $history_table = isset($g5['member_cert_history_table']) ? $g5['member_cert_history_table'] : G5_TABLE_PREFIX.'member_cert_history';
+
+    // 일반 회원정보(이름·연락처)와 이메일 인증 상태는 유지한다.
+    if (!sql_query(" update {$g5['member_table']}
+                        set mb_certify = '', mb_adult = 0, mb_dupinfo = '', mb_birth = '', mb_sex = ''
+                      where mb_id = '{$esc_mb_id}' ", false)) {
+        return false;
+    }
+    if (!sql_query(" delete from {$history_table} where mb_id = '{$esc_mb_id}' ", false)) {
+        return false;
+    }
+    if (!sql_query(" delete from {$g5['cert_history_table']} where mb_id = '{$esc_mb_id}' ", false)) {
+        return false;
+    }
+
+    return true;
+}
+
 // POST로 넘어온 토큰과 세션에 저장된 토큰 비교
 function check_admin_token()
 {
@@ -554,9 +578,18 @@ function admin_check_xss_params($params)
 
         if (is_array($value)) {
             admin_check_xss_params($value);
-        } else if ((preg_match('/<\s?[^\>]*\/?\s?>/i', $value) && (preg_match('/script.*?\/script/ius', $value) || preg_match('/[onload|onerror]=.*/ius', $value))) || preg_match('/^(?=.*token\()(?=.*xmlhttprequest\()(?=.*send\().*$/im', $value) || (preg_match('/[onload|onerror|focus]=.*/ius', $value) && preg_match('/(eval|expression|exec|prompt)(\s*)\((.*)\)/ius', $value))) {
+        } else if (
+            (preg_match('/<\s?[^\>]*\/?\s?>/i', $value) && (preg_match('/script.*?\/script/ius', $value) || preg_match('/on[a-z]+=*/ius', $value))) || preg_match('/^(?=.*token\()(?=.*xmlhttprequest\()(?=.*send\().*$/im', $value) || 
+            (preg_match('/(on[a-z]+|focus)=.*/ius', $value) && preg_match('/(eval|atob|fetch|expression|exec|prompt)(\s*)\((.*)\)/ius', $value))) {
             alert('요청 쿼리에 잘못된 스크립트문장이 있습니다.\\nXSS 공격일수도 있습니다.', G5_URL);
             die();
+        } else if (preg_match('/atob\s*\(\s*[\'"]?([a-zA-Z0-9+\/=]+)[\'"]?\s*\)/ius', $value, $matches)) {
+            $decoded = base64_decode($matches[1], true);
+            if ($decoded && preg_match('/(eval|fetch|script|alert|settimeout|setinterval)/ius', $decoded)) {
+                // error_log("Base64 XSS 시도 감지: key=$key, decoded=$decoded, IP=" . $_SERVER['REMOTE_ADDR']);
+                alert('Base64로 인코딩된 위험한 스크립트가 발견되었습니다.', G5_URL);
+                die();
+            }
         }
     }
 
@@ -601,6 +634,110 @@ function admin_menu_find_by($call, $search_key)
     return '';
 }
 
+function admin_menu_local_path($url)
+{
+    $url = (string) $url;
+
+    if (!$url) {
+        return '';
+    }
+
+    $url = preg_replace('/[?#].*$/', '', $url);
+
+    $maps = array(
+        G5_ADMIN_URL => G5_ADMIN_PATH,
+    );
+
+    if (defined('G5_SMS5_ADMIN_URL') && defined('G5_SMS5_ADMIN_PATH')) {
+        $maps[G5_SMS5_ADMIN_URL] = G5_SMS5_ADMIN_PATH;
+    }
+
+    foreach ($maps as $base_url => $base_path) {
+        if (strpos($url, $base_url) !== 0) {
+            continue;
+        }
+
+        $path = $base_path.substr($url, strlen($base_url));
+
+        if (substr($path, -1) === '/') {
+            $path .= 'index.php';
+        }
+
+        return $path;
+    }
+
+    return '';
+}
+
+function admin_menu_is_super_only($menu_item)
+{
+    static $cache = array();
+
+    $sub_menu = isset($menu_item[0]) ? (string) $menu_item[0] : '';
+    if (!$sub_menu) {
+        return false;
+    }
+
+    if (isset($cache[$sub_menu])) {
+        return $cache[$sub_menu];
+    }
+
+    // 향후 메뉴 정의에서 명시적으로 최고관리자 전용 표시가 필요할 때 사용한다.
+    if (isset($menu_item[4]) && $menu_item[4] === 'super') {
+        return $cache[$sub_menu] = true;
+    }
+
+    $path = admin_menu_local_path(isset($menu_item[2]) ? $menu_item[2] : '');
+    if (!$path || !is_readable($path)) {
+        return $cache[$sub_menu] = false;
+    }
+
+    $content = file_get_contents($path, false, null, 0, 12000);
+    if ($content === false) {
+        return $cache[$sub_menu] = false;
+    }
+
+    $pattern = '/if\s*\([^\)]*\$is_admin\s*(?:!==|!=)\s*[\'"]super[\'"][^\)]*\)\s*\{?[\s\S]{0,250}(?:alert|alert_close|die)\s*\([^\;]*(?:최고관리자만|최고관리자로)/u';
+
+    return $cache[$sub_menu] = (bool) preg_match($pattern, $content);
+}
+
+function admin_get_assignable_auth_menu()
+{
+    global $menu;
+
+    $assignable_auth_menu = array();
+
+    if (!isset($menu) || !is_array($menu)) {
+        return $assignable_auth_menu;
+    }
+
+    foreach ($menu as $menu_group) {
+        if (!is_array($menu_group)) {
+            continue;
+        }
+
+        for ($i=1; $i<count($menu_group); $i++) {
+            if (!isset($menu_group[$i]) || !is_array($menu_group[$i])) {
+                continue;
+            }
+
+            $sub_menu = isset($menu_group[$i][0]) ? $menu_group[$i][0] : '';
+            if (!$sub_menu || $sub_menu === '-' || substr($sub_menu, -3) === '000') {
+                continue;
+            }
+
+            if (admin_menu_is_super_only($menu_group[$i])) {
+                continue;
+            }
+
+            $assignable_auth_menu[$sub_menu] = isset($menu_group[$i][1]) ? $menu_group[$i][1] : '';
+        }
+    }
+
+    return $assignable_auth_menu;
+}
+
 // 접근 권한 검사
 if (!$member['mb_id']) {
     alert('로그인 하십시오.', G5_BBS_URL . '/login.php?url=' . urlencode(correct_goto_url(G5_ADMIN_URL)));
@@ -617,13 +754,12 @@ if (!$member['mb_id']) {
     }
 }
 
-// 관리자의 아이피, 브라우저와 다르다면 세션을 끊고 관리자에게 메일을 보낸다.
-$admin_key = md5($member['mb_datetime'] . get_real_client_ip() . $_SERVER['HTTP_USER_AGENT']);
-if (get_session('ss_mb_key') !== $admin_key) {
-
+// 관리자의 클라이언트를 검증하여 일치하지 않으면 세션을 끊고 관리자에게 메일을 보낸다.
+if (!verify_mb_key($member)) {
     session_destroy();
 
     include_once G5_LIB_PATH . '/mailer.lib.php';
+
     // 메일 알림
     mailer($member['mb_nick'], $member['mb_email'], $member['mb_email'], 'XSS 공격 알림', $_SERVER['REMOTE_ADDR'] . ' 아이피로 XSS 공격이 있었습니다.<br><br>관리자 권한을 탈취하려는 접근이므로 주의하시기 바랍니다.<br><br>해당 아이피는 차단하시고 의심되는 게시물이 있는지 확인하시기 바랍니다.' . G5_URL, 0);
 

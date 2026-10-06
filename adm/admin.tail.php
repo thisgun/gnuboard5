@@ -5,7 +5,7 @@ if (!defined('_GNUBOARD_')) {
 
 // 그누보드5.4.5.5 버전과 영카트5.4.5.5.1 버전이 통합됨에 따라 그누보드 버전만 표시
 // $print_version = defined('G5_YOUNGCART_VER') ? 'YoungCart Version '.G5_YOUNGCART_VER : 'Version '.G5_GNUBOARD_VER;
-$print_version = 'Version ' . G5_GNUBOARD_VER;
+$print_version = ($is_admin == 'super') ? 'Version ' . G5_GNUBOARD_VER : '';
 ?>
 
 <noscript>
@@ -14,16 +14,32 @@ $print_version = 'Version ' . G5_GNUBOARD_VER;
         <strong>자바스크립트를 사용하지 않음</strong>으로 설정하신 경우는 수정이나 삭제시 별도의 경고창이 나오지 않으므로 이점 주의하시기 바랍니다.
     </p>
 </noscript>
-
 </div>
 <footer id="ft">
     <p>
-        Copyright &copy; <?php echo $_SERVER['HTTP_HOST']; ?>. All rights reserved. <?php echo $print_version; ?><br>
+        Copyright &copy; <?php echo htmlspecialchars($_SERVER['HTTP_HOST']); ?>. All rights reserved. <?php echo $print_version; ?><br>
         <button type="button" class="scroll_top"><span class="top_img"></span><span class="top_txt">TOP</span></button>
     </p>
 </footer>
-</div>
 
+<!-- 공통 레이어 팝업 컨테이너 -->
+<div id="adminPopupContainer">
+    <div id="popupOverlay" class="popup-overlay is-hidden" onclick="PopupManager.close('popupOverlay')">
+        <div class="popup-content" onclick="event.stopPropagation()">
+            <div class="popup-header">
+                <strong id="popupTitle" class="popup-title"></strong>
+                <button type="button" class="popup-close-btn" onclick="PopupManager.close('popupOverlay')">
+                    <i class="fa fa-close"></i><span class="sound_only">팝업 닫기</span>
+                </button>
+            </div>
+            <div class="popup-body" id="popupBody">
+                <!-- 동적으로 내용 주입 -->
+            </div>
+            <div class="popup-footer" id="popupFooter">
+                <!-- 버튼 등 동적으로 -->
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -36,8 +52,8 @@ $print_version = 'Version ' . G5_GNUBOARD_VER;
 
 <!-- <p>실행시간 : <?php echo get_microtime() - $begin_time; ?> -->
 
-<script src="<?php echo G5_ADMIN_URL ?>/admin.js?ver=<?php echo G5_JS_VER; ?>"></script>
-<script src="<?php echo G5_JS_URL ?>/jquery.anchorScroll.js?ver=<?php echo G5_JS_VER; ?>"></script>
+<script src="<?php echo get_versioned_asset_url(G5_ADMIN_URL.'/admin.js'); ?>"></script>
+<script src="<?php echo get_versioned_asset_url(G5_JS_URL.'/jquery.anchorScroll.js'); ?>"></script>
 <script>
     $(function() {
 

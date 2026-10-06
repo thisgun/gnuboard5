@@ -16,6 +16,8 @@ if( isset($row['it_seo_title']) && ! $row['it_seo_title'] ){
     shop_seo_title_update($row['it_id']);
 }
 
+if (function_exists('check_case_exist_title')) check_case_exist_title($it, G5_SHOP_DIR, true);
+
 if (!($it['ca_use'] && $it['it_use'])) {
     if (!$is_admin)
         alert('판매가능한 상품이 아닙니다.');
@@ -201,7 +203,7 @@ echo run_replace('shop_it_mobile_head_html', '<div id="sit_hhtml">'.conv_content
 ?>
 
 <?php if($is_orderable) { ?>
-<script src="<?php echo G5_JS_URL; ?>/shop.js"></script>
+<script src="<?php echo get_versioned_asset_url(G5_JS_URL.'/shop.js'); ?>"></script>
 <?php } ?>
 
 <?php

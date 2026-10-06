@@ -4,6 +4,10 @@ include_once('./_common.php');
 
 auth_check_menu($auth, $sub_menu, "r");
 
+if (isset($sfl) && $sfl && !in_array($sfl, array('it_name','it_id','it_maker','it_brand','it_model','it_origin','it_sell_email'))) {
+    $sfl = '';
+}
+
 $g5['title'] = '상품관리';
 include_once (G5_ADMIN_PATH.'/admin.head.php');
 
@@ -21,7 +25,8 @@ for ($i=0; $row=sql_fetch_array($result); $i++)
     for ($i=0; $i<$len; $i++) {
         $nbsp .= '&nbsp;&nbsp;&nbsp;';
     }
-    $ca_list .= '<option value="'.$row['ca_id'].'">'.$nbsp.$row['ca_name'].'</option>'.PHP_EOL;
+    $category_path = function_exists('get_shop_category_path') ? get_shop_category_path($row['ca_id']) : $row['ca_name'];
+    $ca_list .= '<option value="'.$row['ca_id'].'">'.$nbsp.$category_path.'</option>'.PHP_EOL;
 }
 
 $where = " and ";
@@ -63,6 +68,9 @@ if (!$sst) {
     $sst  = "it_id";
     $sod = "desc";
 }
+$allowed_sst = array('it_id', 'it_name', 'it_order', 'it_use', 'it_soldout', 'it_hit', 'it_price', 'it_cust_price', 'it_point', 'it_stock_qty');
+if ($sst && !in_array($sst, $allowed_sst)) $sst = 'it_id';
+if ($sod && !in_array(strtolower($sod), array('asc', 'desc'))) $sod = '';
 $sql_order = "order by $sst $sod";
 
 
@@ -96,7 +104,9 @@ $listall = '<a href="'.$_SERVER['SCRIPT_NAME'].'" class="ov_listall">전체목�
         $len = strlen($row1['ca_id']) / 2 - 1;
         $nbsp = '';
         for ($i=0; $i<$len; $i++) $nbsp .= '&nbsp;&nbsp;&nbsp;';
-        echo '<option value="'.$row1['ca_id'].'" '.get_selected($sca, $row1['ca_id']).'>'.$nbsp.$row1['ca_name'].'</option>'.PHP_EOL;
+        // 전체 카테고리 경로 표시
+        $category_path = function_exists('get_shop_category_path') ? get_shop_category_path($row1['ca_id']) : $row1['ca_name'];
+        echo '<option value="'.$row1['ca_id'].'" '.get_selected($sca, $row1['ca_id']).'>'.$nbsp.$category_path.'</option>'.PHP_EOL;
     }
     ?>
 </select>

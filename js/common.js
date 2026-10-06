@@ -59,6 +59,81 @@ function trim(s)
     return t;
 }
 
+// SVG/SVGZ 업로드 파일 차단
+function is_disallowed_svg_filename(filename)
+{
+    // 서버의 파일명 정규화와 동일하게 특수문자를 제거
+    filename = (filename || "").replace(/[\0"'<>=#&!%\\()*+?]/g, "");
+    filename = filename.substring(filename.lastIndexOf("/") + 1);
+    filename = filename.replace(/[ .\t\n\r\v]+$/, "");
+
+    return /\.(svg|svgz)$/i.test(filename);
+}
+
+function is_disallowed_active_filename(filename)
+{
+    filename = filename || "";
+    if (/[\x00-\x1f\x7f]/.test(filename)) return true;
+    filename = filename.replace(/["'<>=#&!%\\()*+?]/g, "");
+    filename = filename.substring(filename.lastIndexOf("/") + 1).replace(/[ .]+$/, "");
+    return /\.(svgz?|xhtml|xht|xml|xsl|xslt|mht|mhtml|htc)([. :]|$)/i.test(filename);
+}
+
+function is_svg_upload_target(input)
+{
+    var name = input.name || "";
+
+    if (name.indexOf("bf_file[") === 0) {
+        return true;
+    }
+
+    if (input.form && input.form.name == "fformmail" && (name == "file1" || name == "file2")) {
+        return true;
+    }
+
+    return input.form && input.form.name == "fconfig" &&
+        (name == "logo_img" || name == "logo_img2" || name == "mobile_logo_img" || name == "mobile_logo_img2");
+}
+
+function has_disallowed_svg_file(input)
+{
+    var i;
+
+    if (input.files && input.files.length) {
+        for (i=0; i<input.files.length; i++) {
+            if (is_disallowed_active_filename(input.files[i].name)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    return is_disallowed_active_filename(input.value);
+}
+
+function check_disallowed_svg_upload(form)
+{
+    var invalid_file = null;
+
+    $(form).find("input[type=file]").each(function() {
+        if (is_svg_upload_target(this) && has_disallowed_svg_file(this)) {
+            invalid_file = this;
+            return false;
+        }
+    });
+
+    if (!invalid_file) {
+        return true;
+    }
+
+    alert("허용되지 않는 파일 확장자입니다.");
+    $(form).find("input:submit, button:submit, input:image").prop("disabled", false);
+    invalid_file.focus();
+
+    return false;
+}
+
 // 자바스크립트로 PHP의 number_format 흉내를 냄
 // 숫자에 , 를 출력
 function number_format(data)
@@ -134,7 +209,7 @@ function no_comma(data)
 function del(href)
 {
     if(confirm("한번 삭제한 자료는 복구할 방법이 없습니다.\n\n정말 삭제하시겠습니까?")) {
-        document.location.href = href;
+        window.location.href = href;
     }
 }
 
@@ -423,7 +498,7 @@ var win_zip = function(frm_name, frm_zip, frm_addr1, frm_addr2, frm_addr3, frm_j
                 element_wrap = document.createElement("div");
                 element_wrap.setAttribute("id", daum_pape_id);
                 element_wrap.style.cssText = 'display:none;border:1px solid;left:0;width:100%;height:300px;margin:5px 0;position:relative;-webkit-overflow-scrolling:touch;';
-                element_wrap.innerHTML = '<img src="//t1.daumcdn.net/postcode/resource/images/close.png" id="btnFoldWrap" style="cursor:pointer;position:absolute;right:0px;top:-21px;z-index:1" class="close_daum_juso" alt="접기 버튼">';
+                element_wrap.innerHTML = '<img src="//t1.kakaocdn.net/postcode/resource/images/close.png" id="btnFoldWrap" style="cursor:pointer;position:absolute;right:0px;top:-21px;z-index:1" class="close_daum_juso" alt="접기 버튼">';
                 jQuery('form[name="'+frm_name+'"]').find('input[name="'+frm_addr1+'"]').before(element_wrap);
                 jQuery("#"+daum_pape_id).off("click", ".close_daum_juso").on("click", ".close_daum_juso", function(e){
                     e.preventDefault();
@@ -432,7 +507,7 @@ var win_zip = function(frm_name, frm_zip, frm_addr1, frm_addr2, frm_addr3, frm_j
                 });
             }
 
-            new daum.Postcode({
+            new kakao.Postcode({
                 oncomplete: function(data) {
                     complete_fn(data);
                     // iframe을 넣은 element를 안보이게 한다.
@@ -454,7 +529,7 @@ var win_zip = function(frm_name, frm_zip, frm_addr1, frm_addr2, frm_addr3, frm_j
             element_wrap.style.display = 'block';
             break;
         case 2 :    //새창으로 띄우기
-            new daum.Postcode({
+            new kakao.Postcode({
                 oncomplete: function(data) {
                     complete_fn(data);
                 }
@@ -467,7 +542,7 @@ var win_zip = function(frm_name, frm_zip, frm_addr1, frm_addr2, frm_addr3, frm_j
                 element_layer = document.createElement("div");
                 element_layer.setAttribute("id", rayer_id);
                 element_layer.style.cssText = 'display:none;border:5px solid;position:fixed;width:300px;height:460px;left:50%;margin-left:-155px;top:50%;margin-top:-235px;overflow:hidden;-webkit-overflow-scrolling:touch;z-index:10000';
-                element_layer.innerHTML = '<img src="//i1.daumcdn.net/localimg/localimages/07/postcode/320/close.png" id="btnCloseLayer" style="cursor:pointer;position:absolute;right:-3px;top:-3px;z-index:1" class="close_daum_juso" alt="닫기 버튼">';
+                element_layer.innerHTML = '<img src="//t1.kakaocdn.net/localimg/localimages/07/postcode/320/close.png" id="btnCloseLayer" style="cursor:pointer;position:absolute;right:-3px;top:-3px;z-index:1" class="close_daum_juso" alt="닫기 버튼">';
                 document.body.appendChild(element_layer);
                 jQuery("#"+rayer_id).off("click", ".close_daum_juso").on("click", ".close_daum_juso", function(e){
                     e.preventDefault();
@@ -476,7 +551,7 @@ var win_zip = function(frm_name, frm_zip, frm_addr1, frm_addr2, frm_addr3, frm_j
                 });
             }
 
-            new daum.Postcode({
+            new kakao.Postcode({
                 oncomplete: function(data) {
                     complete_fn(data);
                     // iframe을 넣은 element를 안보이게 한다.
@@ -728,6 +803,30 @@ function get_write_token(bo_table)
 }
 
 $(function() {
+    $(document).on("change", "input[type=file]", function() {
+        if (!is_svg_upload_target(this) || !has_disallowed_svg_file(this)) {
+            return true;
+        }
+
+        alert("허용되지 않는 파일 확장자입니다.");
+        this.value = "";
+
+        return false;
+    });
+
+    if (document.addEventListener) {
+        document.addEventListener("submit", function(event) {
+            if (!check_disallowed_svg_upload(event.target)) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+        }, true);
+    } else {
+        $(document).on("submit", "form", function() {
+            return check_disallowed_svg_upload(this);
+        });
+    }
+
     $(document).on("click", "form[name=fwrite] input:submit, form[name=fwrite] button:submit, form[name=fwrite] input:image", function() {
         var f = this.form;
 

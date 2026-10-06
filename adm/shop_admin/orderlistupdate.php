@@ -4,6 +4,8 @@ include_once('./_common.php');
 include_once('./admin.shop.lib.php');
 include_once(G5_LIB_PATH.'/mailer.lib.php');
 
+auth_check_menu($auth, $sub_menu, "w");
+
 check_admin_token();
 
 define("_ORDERMAIL_", true);
@@ -157,6 +159,11 @@ for ($i=0; $i<$count_post_chk; $i++)
                 where od_id = '$od_id' ";
     sql_query($sql, true);
 
+}
+
+// 일괄 완료 처리도 0일 설정이면 즉시 적립한다.
+if ($od_status == '완료') {
+    save_order_point();
 }
 
 // SMS

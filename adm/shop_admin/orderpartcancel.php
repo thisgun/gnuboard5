@@ -12,6 +12,10 @@ $od = sql_fetch($sql);
 if(! (isset($od['od_id']) && $od['od_id']))
     alert_close('주문정보가 존재하지 않습니다.');
 
+if ($od['od_pg'] === 'KAKAOPAY') {
+    alert_close('SIRK 전용 카카오페이의 자동 취소 지원이 종료되었습니다. 이니시스 상점관리자에서 실제 취소 후 주문 상태와 환불금액을 확인해 주십시오.');
+}
+
 if($od['od_pg'] == 'inicis' && $od['od_settle_case'] == '계좌이체')
     alert_close('KG이니시스는 신용카드만 부분취소가 가능합니다.');
 
@@ -21,7 +25,7 @@ if($od['od_settle_case'] == '계좌이체' && substr($od['od_receipt_time'], 0, 
 if($od['od_receipt_price'] - $od['od_refund_price'] <= 0)
     alert_close('부분취소 처리할 금액이 없습니다.');
 
-$g5['title'] = $od['od_settle_case'].' 부분취소';
+$g5['title'] = get_text($od['od_settle_case']).' 부분취소';
 include_once(G5_PATH.'/head.sub.php');
 
 // 취소가능금액
@@ -29,10 +33,11 @@ $od_misu = abs($od['od_misu']);
 ?>
 
 <form name="forderpartcancel" method="post" action="./orderpartcancelupdate.php" onsubmit="return form_check(this);">
+<input type="hidden" name="token" value="<?php echo get_admin_token(); ?>">
 <input type="hidden" name="od_id" value="<?php echo $od_id; ?>">
 
 <div class="new_win">
-    <h1><?php echo $od['od_settle_case']; ?> 부분취소</h1>
+    <h1><?php echo get_text($od['od_settle_case']); ?> 부분취소</h1>
 
     <div class="tbl_frm01 tbl_wrap">
         <table>
@@ -70,14 +75,18 @@ $od_misu = abs($od['od_misu']);
 </div>
 </form>
 
+<script src="<?php echo G5_ADMIN_URL ?>/admin.js"></script>
+
 <script>
+var g5_admin_csrf_token_key = "<?php echo (function_exists('admin_csrf_token_key')) ? admin_csrf_token_key() : ''; ?>";
+
 function form_check(f)
 {
     var max_mny = parseInt(<?php echo $od_misu; ?>);
-    var tax_mny = parseInt(f.mod_tax_mny.value.replace("/[^0-9]/g", ""));
+    var tax_mny = parseInt(f.mod_tax_mny.value.replace(/[^0-9]/g, ""), 10) || 0;
     var free_mny = 0;
-    if(typeof f.mod_free.mny.value != "undefined")
-        free_mny = parseInt(f.mod_free_mny.value.replace("/[^0-9]/g", ""));
+    if(typeof f.mod_free_mny != "undefined")
+        free_mny = parseInt(f.mod_free_mny.value.replace(/[^0-9]/g, ""), 10) || 0;
 
     if(!tax_mny && !free_mny) {
         alert("과세 취소금액 또는 비과세 취소금액을 입력해 주십시오.");

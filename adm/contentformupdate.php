@@ -26,17 +26,34 @@ if ($w == "" || $w == "u") {
 }
 
 $co_id = isset($_REQUEST['co_id']) ? preg_replace('/[^a-z0-9_]/i', '', $_REQUEST['co_id']) : '';
-$co_subject = isset($_POST['co_subject']) ? strip_tags(clean_xss_attributes($_POST['co_subject'])) : '';
+$co_subject = isset($_POST['co_subject']) ? addslashes(strip_tags(clean_xss_attributes(stripslashes($_POST['co_subject'])))) : '';
 $co_include_head = isset($_POST['co_include_head']) ? preg_replace(array("#[\\\]+$#", "#(<\?php|<\?)#i"), "", substr($_POST['co_include_head'], 0, 255)) : '';
 $co_include_tail = isset($_POST['co_include_tail']) ? preg_replace(array("#[\\\]+$#", "#(<\?php|<\?)#i"), "", substr($_POST['co_include_tail'], 0, 255)) : '';
+
+// 최고 관리자가 아니면 include 경로 변경 불가 (board_form_update.php 와 동일 정책)
+if ($is_admin !== 'super') {
+    if ($w == 'u') {
+        $co_include_head = isset($co_row['co_include_head']) ? $co_row['co_include_head'] : '';
+        $co_include_tail = isset($co_row['co_include_tail']) ? $co_row['co_include_tail'] : '';
+    } else {
+        $co_include_head = '';
+        $co_include_tail = '';
+    }
+}
+// 저장·검증 전에 경로를 먼저 정규화하여, 검증 이후 경로가 달라지지 않도록 한다.
+if (function_exists('filter_input_include_path')) {
+    $co_include_head = filter_input_include_path($co_include_head);
+    $co_include_tail = filter_input_include_path($co_include_tail);
+}
+
 $co_tag_filter_use = isset($_POST['co_tag_filter_use']) ? (int) $_POST['co_tag_filter_use'] : 1;
 $co_himg_del = (isset($_POST['co_himg_del']) && $_POST['co_himg_del']) ? 1 : 0;
 $co_timg_del = (isset($_POST['co_timg_del']) && $_POST['co_timg_del']) ? 1 : 0;
 $co_html = isset($_POST['co_html']) ? (int) $_POST['co_html'] : 0;
 $co_content = isset($_POST['co_content']) ? $_POST['co_content'] : '';
 $co_mobile_content = isset($_POST['co_mobile_content']) ? $_POST['co_mobile_content'] : '';
-$co_skin = isset($_POST['co_skin']) ? clean_xss_tags($_POST['co_skin'], 1, 1) : '';
-$co_mobile_skin = isset($_POST['co_mobile_skin']) ? clean_xss_tags($_POST['co_mobile_skin'], 1, 1) : '';
+$co_skin = isset($_POST['co_skin']) ? addslashes(clean_xss_tags(stripslashes($_POST['co_skin']), 1, 1)) : '';
+$co_mobile_skin = isset($_POST['co_mobile_skin']) ? addslashes(clean_xss_tags(stripslashes($_POST['co_mobile_skin']), 1, 1)) : '';
 
 // 관리자가 자동등록방지를 사용해야 할 경우
 if (((isset($co_row['co_include_head']) && $co_row['co_include_head'] !== $co_include_head) || (isset($co_row['co_include_tail']) && $co_row['co_include_tail'] !== $co_include_tail)) && function_exists('get_admin_captcha_by') && get_admin_captcha_by()) {
@@ -75,6 +92,14 @@ if ($co_include_tail) {
     }
 }
 
+if ($co_include_head && function_exists('is_content_include_allowed') && !is_content_include_allowed($co_include_head)) {
+    alert('상단 파일 경로로 사용할 수 없는 위치입니다.');
+}
+
+if ($co_include_tail && function_exists('is_content_include_allowed') && !is_content_include_allowed($co_include_tail)) {
+    alert('하단 파일 경로로 사용할 수 없는 위치입니다.');
+}
+
 if ($co_include_head && !is_include_path_check($co_include_head, 1)) {
     $co_include_head = '';
     $error_msg = '/data/file/ 또는 /data/editor/ 포함된 문자를 상단 파일 경로에 포함시킬수 없습니다.';
@@ -83,11 +108,6 @@ if ($co_include_head && !is_include_path_check($co_include_head, 1)) {
 if ($co_include_tail && !is_include_path_check($co_include_tail, 1)) {
     $co_include_tail = '';
     $error_msg = '/data/file/ 또는 /data/editor/ 포함된 문자를 하단 파일 경로에 포함시킬수 없습니다.';
-}
-
-if (function_exists('filter_input_include_path')) {
-    $co_include_head = filter_input_include_path($co_include_head);
-    $co_include_tail = filter_input_include_path($co_include_tail);
 }
 
 $co_seo_title = exist_seo_title_recursive('content', generate_seo_title($co_subject), $g5['content_table'], $co_id);
@@ -113,17 +133,20 @@ if ($w == "") {
                 set co_id = '$co_id',
                     $sql_common ";
     sql_query($sql);
+    run_event('admin_content_created', $co_id);
 } elseif ($w == "u") {
     $sql = " update {$g5['content_table']}
                 set $sql_common
               where co_id = '$co_id' ";
     sql_query($sql);
+    run_event('admin_content_updated', $co_id);
 } elseif ($w == "d") {
     @unlink(G5_DATA_PATH . "/content/{$co_id}_h");
     @unlink(G5_DATA_PATH . "/content/{$co_id}_t");
 
     $sql = " delete from {$g5['content_table']} where co_id = '$co_id' ";
     sql_query($sql);
+    run_event('admin_content_deleted', $co_id);
 }
 
 if (function_exists('get_admin_captcha_by')) {
@@ -133,6 +156,20 @@ if (function_exists('get_admin_captcha_by')) {
 g5_delete_cache_by_prefix('content-' . $co_id . '-');
 
 if ($w == "" || $w == "u") {
+    foreach (array('co_himg', 'co_timg') as $content_img_field) {
+        if (empty($_FILES[$content_img_field]['name']) || empty($_FILES[$content_img_field]['tmp_name']))
+            continue;
+
+        // 상단/하단 이미지 슬롯에는 이미지만 허용하고, 실행 가능한 태그가 담긴 파일은 거부한다.
+        $tmp_file = $_FILES[$content_img_field]['tmp_name'];
+        $is_valid_image = @getimagesize($tmp_file);
+        $head_bytes = @file_get_contents($tmp_file, false, null, 0, 8192);
+
+        if ($is_valid_image === false || ($head_bytes !== false && preg_match('/<\?php|<\?=|<\?|<script/i', $head_bytes))) {
+            alert('상단/하단 이미지에는 이미지 파일만 등록할 수 있습니다.');
+        }
+    }
+
     if ($_FILES['co_himg']['name']) {
         $dest_path = G5_DATA_PATH . "/content/" . $co_id . "_h";
         @move_uploaded_file($_FILES['co_himg']['tmp_name'], $dest_path);

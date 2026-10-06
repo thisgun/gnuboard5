@@ -16,7 +16,7 @@ if ($w == 'd') {
 
 check_admin_token();
 
-$nw_subject = isset($_POST['nw_subject']) ? strip_tags(clean_xss_attributes($_POST['nw_subject'])) : '';
+$nw_subject = isset($_POST['nw_subject']) ? addslashes(strip_tags(clean_xss_attributes(stripslashes($_POST['nw_subject'])))) : '';
 $posts = array();
 
 $check_keys = array(
@@ -37,7 +37,7 @@ foreach ($check_keys as $key => $val) {
     if ($val === 'int') {
         $posts[$key] = isset($_POST[$key]) ? (int) $_POST[$key] : 0;
     } elseif ($val === 'str') {
-        $posts[$key] = isset($_POST[$key]) ? clean_xss_tags($_POST[$key], 1, 1) : 0;
+        $posts[$key] = isset($_POST[$key]) ? addslashes(clean_xss_tags(stripslashes($_POST[$key]), 1, 1)) : 0;
     } else {
         $posts[$key] = isset($_POST[$key]) ? trim($_POST[$key]) : 0;
     }
@@ -59,14 +59,16 @@ $sql_common = " nw_device = '{$posts['nw_device']}',
 if ($w == "") {
     $sql = " insert {$g5['new_win_table']} set $sql_common ";
     sql_query($sql);
-
     $nw_id = sql_insert_id();
+    run_event('admin_newwin_created', $nw_id);
 } elseif ($w == "u") {
     $sql = " update {$g5['new_win_table']} set $sql_common where nw_id = '$nw_id' ";
     sql_query($sql);
+    run_event('admin_newwin_updated', $nw_id);
 } elseif ($w == "d") {
     $sql = " delete from {$g5['new_win_table']} where nw_id = '$nw_id' ";
     sql_query($sql);
+    run_event('admin_newwin_deleted', $nw_id);
 }
 
 if ($w == "d") {

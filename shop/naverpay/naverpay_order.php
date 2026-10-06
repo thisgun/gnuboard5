@@ -3,12 +3,15 @@ include_once('./_common.php');
 include_once(G5_SHOP_PATH.'/settle_naverpay.inc.php');
 include_once(G5_LIB_PATH.'/naverpay.lib.php');
 
+if (!(defined('G5_SHOP_USE_NAVERPAY') && G5_SHOP_USE_NAVERPAY)) return;
+
 $pattern = '#[/\'\"%=*\#\(\)\|\+\&\!\$~\{\}\[\]`;:\?\^\,]#';
 $post_naverpay_form = isset($_POST['naverpay_form']) ? clean_xss_tags($_POST['naverpay_form']) : '';
 
 $is_collect = false;    //착불체크 변수 초기화
 $is_prepay = false;     //선불체크 변수 초기화
 $is_cart = false;       //장바구니 체크 변수 초기화
+$cart_send_cost = array();  //장바구니 배송비 구분값 (DB 기준)
 
 if($post_naverpay_form == 'cart.php') {
     if(! (isset($_POST['ct_chk']) && is_array($_POST['ct_chk']) && count($_POST['ct_chk'])))
@@ -34,7 +37,7 @@ if($post_naverpay_form == 'cart.php') {
             $_POST['io_type'][$it_id][] = $row['io_type'];
             $_POST['ct_qty'][$it_id][] = $row['ct_qty'];
             $_POST['io_value'][$it_id][] = $row['ct_option'];
-            $_POST['ct_send_cost'][$it_id][] = $row['ct_send_cost'];
+            $cart_send_cost[$it_id][] = $row['ct_send_cost'];
 
             $is_free = false;   //무료 인지 체크 변수 초기화
 
@@ -98,7 +101,8 @@ for($i=0; $i<$count; $i++) {
     $opt_count = (isset($_POST['io_id'][$it_id]) && is_array($_POST['io_id'][$it_id])) ? count($_POST['io_id'][$it_id]) : 0;
     
     if( ! $it_id) continue;
-
+    if (!preg_match('/^[a-zA-Z0-9_-]+$/', $it_id)) continue;
+    
     if($opt_count && $_POST['io_type'][$it_id][0] != 0)
         return_error2json('상품의 선택옵션을 선택해 주십시오.');
 
@@ -206,9 +210,9 @@ for($i=0; $i<$count; $i++) {
         
         $ct_send_cost = 0;
         if($ct_send_cost != 1) {  //
-            if( $is_cart && !empty($_POST['ct_send_cost'][$it_id][$k]) ){
+            if( $is_cart && !empty($cart_send_cost[$it_id][$k]) ){
 
-                $ct_send_cost = $_POST['ct_send_cost'][$it_id][$k];
+                $ct_send_cost = $cart_send_cost[$it_id][$k];
 
             } else {
                 // 배송비결제

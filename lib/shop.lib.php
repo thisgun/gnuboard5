@@ -1,7 +1,122 @@
 <?php
+include_once(dirname(__FILE__).'/shop.cartvalidate.lib.php');
 //==============================================================================
 // 쇼핑몰 라이브러리 모음 시작
 //==============================================================================
+
+/**
+ * 쇼핑몰 주문/개인결제 조회용 식별자(uid)를 생성한다.
+ *
+ * 결정적(deterministic) 생성 방식은 유지되므로 여러 파일에서 독립적으로 호출해도
+ * 동일한 값을 얻을 수 있어 기존 검증 구조를 그대로 사용 가능하다.
+ *
+ * @param string $type 'order' 또는 'personalpay' 등 네임스페이스 구분자
+ * @param string $id   주문번호 / 개인결제번호 등
+ * @param string $time 생성 시각 (od_time / pp_time)
+ * @param string $ip   생성 시 IP (od_ip / pp_ip)
+ * @return string 64자 hex
+ */
+function get_shop_uid($type, $id, $time, $ip)
+{
+    $key = (defined('G5_TOKEN_ENCRYPTION_KEY') && G5_TOKEN_ENCRYPTION_KEY)
+         ? G5_TOKEN_ENCRYPTION_KEY
+         : (defined('G5_TABLE_PREFIX') ? G5_TABLE_PREFIX : '');
+
+    $payload = $type . '|' . $id . '|' . $time . '|' . $ip;
+
+    return hash_hmac('sha256', $payload, $key);
+}
+
+/**
+ * 상품 목록 정렬 요청을 허용된 DB 컬럼과 방향으로 변환한다.
+ *
+ * @param mixed $sort    외부 정렬 키
+ * @param mixed $sortodr 외부 정렬 방향
+ * @return array 검증된 정렬 컬럼과 방향. 잘못된 입력이면 모두 빈 문자열
+ */
+function get_shop_item_sort($sort, $sortodr)
+{
+    $sort_columns = array(
+        'it_name'        => 'it_name',
+        'it_sum_qty'     => 'it_sum_qty',
+        'it_price'       => 'it_price',
+        'it_use_avg'     => 'it_use_avg',
+        'it_use_cnt'     => 'it_use_cnt',
+        'it_update_time' => 'it_update_time',
+    );
+
+    if (!is_string($sort) || !isset($sort_columns[$sort])) {
+        return array('', '');
+    }
+
+    if (!is_string($sortodr)) {
+        return array('', '');
+    }
+
+    $sortodr = strtolower($sortodr);
+    if (!in_array($sortodr, array('asc', 'desc'), true)) {
+        return array('', '');
+    }
+
+    return array($sort_columns[$sort], $sortodr);
+}
+
+// 쇼핑몰 리소스 소유자 또는 최고관리자인지 확인
+function is_shop_resource_owner_or_super_admin($owner_id, $member_id, $admin_type)
+{
+    return $admin_type === 'super' || ($member_id !== '' && $owner_id === $member_id);
+}
+
+/**
+ * 현금영수증 발급 또는 조회에 대한 검증
+ *
+ * 다음 셋 중 하나여야 접근 허용:
+ *   1. 최고관리자 (게시판/그룹 관리자 권한은 제외)
+ *   2. 본인 주문/개인결제 (로그인 회원이고 mb_id 일치)
+ *   3. 비회원이지만 정당한 세션 uid 보유 (orderinquiry.php에서 비밀번호 검증 통과 후
+ *      또는 주문 완료 직후 세션에 저장된 ss_orderview_uid / ss_personalpay_uid가
+ *      현재 주문/개인결제의 HMAC uid와 일치)
+ *
+ * @param array  $od    주문 또는 개인결제 행 (DB에서 fetch한 결과)
+ * @param string $type  'order' (g5_shop_order) 또는 'personalpay' (g5_shop_personalpay)
+ * @return bool
+ */
+function is_shop_order_owner($od, $type = 'order')
+{
+    global $is_admin, $is_member, $member;
+
+    if (!is_array($od)) {
+        return false;
+    }
+
+    // 최고관리자만 전체 주문/개인결제 접근 허용
+    // (요청 bo_table 로 좌우되는 게시판/그룹 관리자 문맥은 인정하지 않음)
+    if ($is_admin === 'super') {
+        return true;
+    }
+
+    // 본인 주문/개인결제 (로그인 회원)
+    if ($is_member && isset($od['mb_id']) && $od['mb_id'] !== '' && $od['mb_id'] === $member['mb_id']) {
+        return true;
+    }
+
+    // 세션 uid 검증
+    if ($type === 'personalpay') {
+        if (empty($od['pp_id'])) {
+            return false;
+        }
+        $expected = get_shop_uid('personalpay', $od['pp_id'], $od['pp_time'], $_SERVER['REMOTE_ADDR']);
+        $session_uid = get_session('ss_personalpay_uid');
+    } else {
+        if (empty($od['od_id'])) {
+            return false;
+        }
+        $expected = get_shop_uid('order', $od['od_id'], $od['od_time'], $od['od_ip']);
+        $session_uid = get_session('ss_orderview_uid');
+    }
+
+    return ($session_uid !== '' && $expected === $session_uid);
+}
 
 /*
 간편 사용법 : 상품유형을 1~5 사이로 지정합니다.
@@ -948,7 +1063,7 @@ function session_check()
     global $g5;
 
     if (!trim(get_session('ss_uniqid')))
-        gotourl(G5_SHOP_URL);
+        goto_url(G5_SHOP_URL);
 }
 
 // 상품 선택옵션
@@ -1010,7 +1125,7 @@ function get_item_options($it_id, $subject, $is_div='', $is_first_option_title='
                 for($k=0; $k<$opt_count; $k++) {
                     $opt_val = $opt[$k];
                     if(strlen($opt_val)) {
-                        $select .= '<option value="'.$opt_val.'">'.$opt_val.'</option>'.PHP_EOL;
+                        $select .= '<option value="'.get_text($opt_val).'">'.get_text($opt_val).'</option>'.PHP_EOL;
                     }
                 }
                 $select .= '</select>'.PHP_EOL;
@@ -1046,7 +1161,7 @@ function get_item_options($it_id, $subject, $is_div='', $is_first_option_title='
             else
                 $soldout = '';
 
-            $select .= '<option value="'.$row['io_id'].','.$row['io_price'].','.$row['io_stock_qty'].'">'.$row['io_id'].$price.$soldout.'</option>'.PHP_EOL;
+            $select .= '<option value="'.get_text($row['io_id']).','.$row['io_price'].','.$row['io_stock_qty'].'">'.get_text($row['io_id']).$price.$soldout.'</option>'.PHP_EOL;
         }
         $select .= '</select>'.PHP_EOL;
         
@@ -1101,7 +1216,7 @@ function get_item_supply($it_id, $subject, $is_div='', $is_first_option_title=''
             else
                 $soldout = '';
 
-            $options[$opt_id[0]][] = '<option value="'.$opt_id[1].','.$row['io_price'].','.$io_stock_qty.'">'.$opt_id[1].$price.$soldout.'</option>';
+            $options[$opt_id[0]][] = '<option value="'.get_text($opt_id[1]).','.$row['io_price'].','.$io_stock_qty.'">'.get_text($opt_id[1]).$price.$soldout.'</option>';
         }
     }
 
@@ -1122,7 +1237,7 @@ function get_item_supply($it_id, $subject, $is_div='', $is_first_option_title=''
             $first_option_title = $is_first_option_title ? $subj[$i] : '선택';
 
             $select = '<select id="it_supply_'.$seq.'" class="it_supply">'.PHP_EOL;
-            $select .= '<option value="">'.$first_option_title.'</option>'.PHP_EOL;
+            $select .= '<option value="">'.get_text($first_option_title).'</option>'.PHP_EOL;
             for($k=0; $k<$opt_count; $k++) {
                 $opt_val = $opt[$k];
                 if($opt_val) {
@@ -1280,14 +1395,16 @@ function get_list_skin_options($pattern, $dirname='./', $sval='')
 {
     $str = '<option value="">선택</option>'.PHP_EOL;
 
-    unset($arr);
-    $handle = opendir($dirname);
-    while ($file = readdir($handle)) {
-        if (preg_match("/$pattern/", $file, $matches)) {
-            $arr[] = $matches[0];
+    $arr = array();
+    $handle = @opendir($dirname);
+    if ($handle !== false) {
+        while (false !== ($file = readdir($handle))) {
+            if (preg_match("/$pattern/", $file, $matches)) {
+                $arr[] = $matches[0];
+            }
         }
+        closedir($handle);
     }
-    closedir($handle);
 
     sort($arr);
     foreach($arr as $value) {
@@ -1332,11 +1449,15 @@ function alert_opener($msg='', $url='')
     global $g5;
 
     if (!$msg) $msg = '올바른 방법으로 이용해 주십시오.';
+    $msg = strip_tags($msg);
+    $js_replace = array('\\' => '\\\\', '"' => '\\"', "'" => '\\u0027', '/' => '\\/', "\r" => '\\r', "\n" => '\\n', "\t" => '\\t', '<' => '\\u003C', '>' => '\\u003E', '&' => '\\u0026', "\xE2\x80\xA8" => '\\u2028', "\xE2\x80\xA9" => '\\u2029');
+    $js_msg = function_exists('get_js_safe_string') ? get_js_safe_string($msg) : '"'.strtr((string)$msg, $js_replace).'"';
+    $js_url = function_exists('get_js_safe_string') ? get_js_safe_string($url) : '"'.strtr((string)$url, $js_replace).'"';
 
     echo "<meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\">";
     echo "<script>";
-    echo "alert(\"$msg\");";
-    echo "opener.location.href=\"$url\";";
+    echo "alert(".$js_msg.");";
+    echo "opener.location.href=".$js_url.";";
     echo "self.close();";
     echo "</script>";
     exit;
@@ -1554,17 +1675,32 @@ function get_coupon_id()
 {
     $len = 16;
     $chars = "ABCDEFGHJKLMNPQRSTUVWXYZ123456789";
-
-    srand((double)microtime()*1000000);
-
-    $i = 0;
+    $chars_len = strlen($chars);
     $str = '';
 
-    while ($i < $len) {
-        $num = rand() % strlen($chars);
-        $tmp = substr($chars, $num, 1);
-        $str .= $tmp;
-        $i++;
+    if (function_exists('get_random_token_string')) {
+        // 문자 종류 수로 나누어 떨어지는 구간만 사용하여 특정 문자에 치우치지 않도록 한다.
+        $limit = 256 - (256 % $chars_len);
+        $round = 0;
+
+        while (strlen($str) < $len && $round < 8) {
+            $bytes = pack('H*', get_random_token_string($len + 8));
+            $bytes_len = strlen($bytes);
+
+            for ($i = 0; $i < $bytes_len && strlen($str) < $len; $i++) {
+                $num = ord($bytes[$i]);
+                if ($num >= $limit)
+                    continue;
+
+                $str .= substr($chars, $num % $chars_len, 1);
+            }
+
+            $round++;
+        }
+    }
+
+    while (strlen($str) < $len) {
+        $str .= substr($chars, mt_rand(0, $chars_len - 1), 1);
     }
 
     $str = preg_replace("/([0-9A-Z]{4})([0-9A-Z]{4})([0-9A-Z]{4})([0-9A-Z]{4})/", "\\1-\\2-\\3-\\4", $str);
@@ -1796,7 +1932,8 @@ function get_sendcost($cart_id, $selected=1)
         $send_cost_limit = explode(";", $default['de_send_cost_limit']);
         $send_cost_list  = explode(";", $default['de_send_cost_list']);
         $send_cost = 0;
-        for ($k=0; $k<count($send_cost_limit); $k++) {
+        $send_cost_limit_cnt = count($send_cost_limit);
+        for ($k=0; $k<$send_cost_limit_cnt; $k++) {
             // 총판매금액이 배송비 상한가 보다 작다면
             if ($total_price < preg_replace('/[^0-9]/', '', $send_cost_limit[$k])) {
                 $send_cost = preg_replace('/[^0-9]/', '', $send_cost_list[$k]);
@@ -1871,7 +2008,8 @@ function get_item_sendcost2($it_id, $price, $qty)
             $send_cost_limit = explode(";", $default['de_send_cost_limit']);
             $send_cost_list  = explode(";", $default['de_send_cost_list']);
 
-            for ($k=0; $k<count($send_cost_limit); $k++) {
+            $send_cost_limit_cnt = count($send_cost_limit);
+            for ($k=0; $k<$send_cost_limit_cnt; $k++) {
                 // 총판매금액이 배송비 상한가 보다 작다면
                 if ($price < preg_replace('/[^0-9]/', '', $send_cost_limit[$k])) {
                     $sendcost = preg_replace('/[^0-9]/', '', $send_cost_list[$k]);
@@ -1943,8 +2081,9 @@ function is_soldout($it_id, $is_cache=false)
     // 상품정보
     $it = get_shop_item($it_id, $is_cache);
 
-    if($it['it_soldout'] || $it['it_stock_qty'] <= 0)
+    if ($it['it_soldout']) {
         return true;
+    }
 
     $count = 0;
     $soldout = false;
@@ -1953,7 +2092,7 @@ function is_soldout($it_id, $is_cache=false)
     $sql = " select count(*) as cnt from {$g5['g5_shop_item_option_table']} where it_id = '$it_id' and io_type = '0' ";
     $row = sql_fetch($sql);
 
-    if($row['cnt']) {
+    if (isset($row['cnt']) && $row['cnt']) {
         $sql = " select io_id, io_type, io_stock_qty
                     from {$g5['g5_shop_item_option_table']}
                     where it_id = '$it_id'
@@ -1972,12 +2111,18 @@ function is_soldout($it_id, $is_cache=false)
         // 모든 선택옵션 품절이면 상품 품절
         if($i == $count)
             $soldout = true;
-    } else {
-        // 상품 재고수량
-        $stock_qty = get_it_stock_qty($it_id);
 
-        if($stock_qty <= 0)
+    } else {
+
+        if ($it['it_stock_qty'] <= 0) {
             $soldout = true;
+        } else {
+            // 상품 재고수량
+            $stock_qty = get_it_stock_qty($it_id);
+
+            if($stock_qty <= 0)
+                $soldout = true;
+        }
     }
     
     $cache[$key] = $soldout;
@@ -1990,7 +2135,7 @@ function check_itemuse_write($it_id, $mb_id, $close=true)
 {
     global $g5, $default, $is_admin;
 
-    if(!$is_admin && $default['de_item_use_write'])
+    if($is_admin !== 'super' && $default['de_item_use_write'])
     {
         $sql = " select count(*) as cnt
                     from {$g5['g5_shop_cart_table']}
@@ -2104,8 +2249,9 @@ function get_delivery_inquiry($company, $invoice, $class='')
 
     $dlcomp = explode(")", str_replace("(", "", G5_DELIVERY_COMPANY));
 
-    for($i=0; $i<count($dlcomp); $i++) {
-        if(strstr($dlcomp[$i], $company)) {
+    $dlcomp_cnt = count($dlcomp);
+    for($i=0; $i<$dlcomp_cnt; $i++) {
+        if(strpos($dlcomp[$i], $company) !== false) {
             list($com, $url, $tel) = explode("^", $dlcomp[$i]);
             break;
         }
@@ -2303,6 +2449,12 @@ function is_use_easypay($payname=''){
 
     $de_easy_pay_service_array = (isset($default['de_easy_pay_services']) && $default['de_easy_pay_services']) ? explode(',', $default['de_easy_pay_services']) : array();
 
+    // 기본 PG에서 계약·사용 설정한 네이버페이를 우선한다.
+    $pg_easypay_catalog = shop_easypay_catalog($default['de_pg_service']);
+    if ($payname === 'global_nhnkcp' && isset($pg_easypay_catalog[$default['de_pg_service'].'_naverpay']) && shop_easypay_enabled($default['de_pg_service'].'_naverpay')) {
+        return false;
+    }
+
     if($payname === 'global_nhnkcp' && $de_easy_pay_service_array && ('kcp' !== $default['de_pg_service'])){      // NHN_KCP 외 타PG 사용시
         if( in_array('global_nhnkcp_naverpay', $de_easy_pay_service_array) && ($default['de_card_test'] || (!$default['de_card_test'] && $default['de_kcp_mid'] && $default['de_kcp_site_key']) ) ){
             return true;
@@ -2320,12 +2472,12 @@ function exists_inicis_shop_order($oid, $pp=array(), $od_time='', $od_ip='')
     //개인결제
     if( $pp ) {
         $hash_data = md5($pp['pp_id'].$pp['pp_price'].$pp['pp_time']);
-        if( $hash_data == get_session('ss_personalpay_hash') ){
+        if( $hash_data === get_session('ss_personalpay_hash') ){
             // 개인결제번호제거
             set_session('ss_personalpay_id', '');
             set_session('ss_personalpay_hash', '');
 
-            $uid = md5($pp['pp_id'].$pp['pp_time'].$od_ip);
+            $uid = get_shop_uid('personalpay', $pp['pp_id'], $pp['pp_time'], $od_ip);
             set_session('ss_personalpay_uid', $uid);
             
             goto_url(G5_SHOP_URL.'/personalpayresult.php?pp_id='.$pp['pp_id'].'&amp;uid='.$uid.'&amp;ini_noti=1');
@@ -2339,7 +2491,7 @@ function exists_inicis_shop_order($oid, $pp=array(), $od_time='', $od_ip='')
 
         if( $oid == get_session('ss_order_id') ){
             // orderview 에서 사용하기 위해 session에 넣고
-            $uid = md5($oid.$od_time.$od_ip);
+            $uid = get_shop_uid('order', $oid, $od_time, $od_ip);
             set_session('ss_orderview_uid', $uid);
             goto_url(G5_SHOP_URL.'/orderinquiryview.php?od_id='.$oid.'&amp;uid='.$uid.'&amp;ini_noti=1');
         } else {
@@ -2349,17 +2501,33 @@ function exists_inicis_shop_order($oid, $pp=array(), $od_time='', $od_ip='')
     return '';
 }
 
+// 상태 변경 UPDATE에서 ct_status를 대입하기 전에 사용한다.
+// 완료 상태에서 다시 저장하면 최초 완료 시각을 유지하고, 완료 해제 시 초기화한다.
+function get_cart_complete_time_sql($ct_status)
+{
+    if ($ct_status != '완료') {
+        return 'NULL';
+    }
+
+    return "CASE WHEN ct_status = '완료' THEN ct_complete_time ELSE '".G5_TIME_YMDHIS."' END";
+}
+
 //------------------------------------------------------------------------------
 // 주문포인트를 적립한다.
-// 설정일이 지난 포인트 부여되지 않은 배송완료된 장바구니 자료에 포인트 부여
-// 설정일이 0 이면 주문서 완료 설정 시점에서 포인트를 바로 부여합니다.
+// 배송완료 시각(ct_complete_time)부터 설정일이 지난 미적립 상품에 포인트 부여
+// 설정일이 0 이면 배송완료 처리 시 포인트를 바로 부여합니다.
 //------------------------------------------------------------------------------
 function save_order_point($ct_status="완료")
 {
     global $g5, $default;
 
+    // 완료 시각이 없는 기존 상품에만 종전의 장바구니 생성 시각 기준을 유지한다.
     $beforedays = date("Y-m-d H:i:s", ( time() - (86400 * (int)$default['de_point_days']) ) ); // 86400초는 하루
-    $sql = " select * from {$g5['g5_shop_cart_table']} where ct_status = '$ct_status' and ct_point_use = '0' and ct_time <= '$beforedays' ";
+    $sql = " select * from {$g5['g5_shop_cart_table']}
+              where ct_status = '$ct_status'
+                and ct_point_use = '0'
+                and ((ct_complete_time is not null and ct_complete_time <= '$beforedays')
+                     or (ct_complete_time is null and ct_time <= '$beforedays')) ";
     $result = sql_query($sql);
     for ($i=0; $row=sql_fetch_array($result); $i++) {
         // 회원 ID 를 얻는다.
@@ -2381,7 +2549,8 @@ function get_delivery_company($company)
     $option .= '<option value="자체배송" '.get_selected($company, '자체배송').'>자체배송</option>'.PHP_EOL;
 
     $dlcomp = explode(")", str_replace("(", "", G5_DELIVERY_COMPANY));
-    for ($i=0; $i<count($dlcomp); $i++) {
+    $dlcomp_cnt = count($dlcomp);
+    for ($i=0; $i<$dlcomp_cnt; $i++) {
         if (trim($dlcomp[$i])=="") continue;
         list($value, $url, $tel) = explode("^", $dlcomp[$i]);
         $option .= '<option value="'.$value.'" '.get_selected($company, $value).'>'.$value.'</option>'.PHP_EOL;
@@ -2399,7 +2568,8 @@ function get_itemuse_thumb($contents, $thumb_width, $thumb_height, $is_create=fa
 
     $matches = get_editor_image($contents, false);
 
-    for($i=0; $i<count($matches[1]); $i++)
+    $matches_cnt = count($matches[1]);
+    for($i=0; $i<$matches_cnt; $i++)
     {
         // 이미지 path 구함
         $p = parse_url($matches[1][$i]);
@@ -2454,7 +2624,7 @@ function get_itemuselist_thumbnail($it_id, $contents, $thumb_width, $thumb_heigh
 }
 
 function shop_is_taxsave($od, $is_view_receipt=false){
-	global $default, $is_memeber;
+	global $default, $is_member;
 
 	$od_pay_type = '';
 
@@ -2467,17 +2637,26 @@ function shop_is_taxsave($od, $is_view_receipt=false){
 	}
 	
 	if( $od_pay_type ) {
-		if( $default['de_taxsave_use'] && strstr( $default['de_taxsave_types'], $od_pay_type ) ){
+		if( $default['de_taxsave_use'] && strpos( $default['de_taxsave_types'], $od_pay_type ) !== false ){
 			return 1;
 		}
-		
+
 		// 아직 현금영수증 받기전 상태일때만
-		if( $is_view_receipt && ! $od['od_cash'] && in_array($od['od_settle_case'], array('계좌이체', '가상계좌')) && ! strstr( $default['de_taxsave_types'], $od_pay_type ) ){
+		if( $is_view_receipt && ! $od['od_cash'] && in_array($od['od_settle_case'], array('계좌이체', '가상계좌')) && strpos( $default['de_taxsave_types'], $od_pay_type ) === false ){
 			return 2;
 		}
 	}
 
 	return 0;
+}
+
+// 해당 주문에 현금영수증이 발급되었다면 마이페이지 주문
+function is_order_cashreceipt($od) {
+    if ($od['od_cash'] && $od['od_cash_no'] && $od['od_cash_info'] && $od['od_receipt_price'] && in_array($od['od_settle_case'], array('무통장', '계좌이체', '가상계좌'))) {
+        return true;
+    }
+
+    return false;
 }
 
 // 장바구니 금액 체크 $is_price_update 가 true 이면 장바구니 가격 업데이트한다. 
@@ -2516,7 +2695,7 @@ function before_check_cart_price($s_cart_id, $is_ct_select_condition=false, $is_
         }
 
         if( $row['io_id'] ){
-            $io_sql = " select * from {$g5['g5_shop_item_option_table']} where it_id = '{$it['it_id']}' and io_id = '{$row['io_id']}' ";
+            $io_sql = " select * from {$g5['g5_shop_item_option_table']} where it_id = '{$it['it_id']}' and io_id = '{$row['io_id']}' and io_type = '{$row['io_type']}' and io_use = '1' ";
             $io_infos = sql_fetch( $io_sql );
 
             if( $io_infos['io_type'] ){
@@ -2625,14 +2804,23 @@ function make_order_field($data, $exclude)
 
         if(is_array($value)) {
             foreach($value as $k=>$v) {
-                $field .= '<input type="hidden" name="'.$key.'['.$k.']" value="'.$v.'">'.PHP_EOL;
+                $field .= '<input type="hidden" name="'.get_text($key.'['.$k.']').'" value="'.get_text($v).'">'.PHP_EOL;
             }
         } else {
-            $field .= '<input type="hidden" name="'.$key.'" value="'.$value.'">'.PHP_EOL;
+            $field .= '<input type="hidden" name="'.get_text($key).'" value="'.get_text($value).'">'.PHP_EOL;
         }
     }
 
     return $field;
+}
+
+function shop_order_data_fields($is_personal=0) {
+
+    if ($is_personal){
+        return array('pp_name', 'pp_email', 'pp_hp', 'pp_settle_case');
+    }
+
+    return array('od_price', 'od_name', 'od_tel', 'od_hp', 'od_email', 'od_memo', 'od_settle_case', 'max_temp_point', 'od_temp_point', 'od_bank_account', 'od_deposit_name', 'od_test', 'od_ip', 'od_zip', 'od_addr1', 'od_addr2', 'od_addr3', 'od_addr_jibeon', 'od_b_name', 'od_b_tel', 'od_b_hp', 'od_b_addr1', 'od_b_addr2', 'od_b_addr3', 'od_b_addr_jibeon', 'od_b_zip', 'od_send_cost', 'od_send_cost2', 'od_hope_date');
 }
 
 // 주문요청기록 로그를 남깁니다.
@@ -2641,24 +2829,14 @@ function add_order_post_log($msg='', $code='error'){
     
     if( empty($_POST) ) return;
 
-    $post_data = base64_encode(serialize($_POST));
+    $log_data = $_POST;
+    unset($log_data['od_pwd'], $log_data['g5_order_state'], $log_data['g5_checkout_nonce']);
+    $post_data = base64_encode(serialize($log_data));
     $od_id = get_session('ss_order_id');
 
     if( $code === 'delete' ){
         sql_query(" delete from {$g5['g5_shop_post_log_table']} where (oid = '$od_id' and mb_id = '{$member['mb_id']}' and ol_code != 'error') OR ol_datetime < '".date('Y-m-d H:i:s', strtotime('-15 day', G5_SERVER_TIME))."' ", false);
         return;
-    }
-
-    if ( $code === 'error' ) {
-        $result = sql_query("describe `{$g5['g5_shop_post_log_table']}`");
-        while ($row = sql_fetch_array($result)){
-            if( $row['Field'] === 'ol_msg' && $row['Type'] === 'varchar(255)' ){
-                sql_query("ALTER TABLE `{$g5['g5_shop_post_log_table']}` MODIFY ol_msg TEXT NOT NULL;", false);
-                sql_query("ALTER TABLE `{$g5['g5_shop_post_log_table']}` DROP PRIMARY KEY;", false);
-                sql_query("ALTER TABLE `{$g5['g5_shop_post_log_table']}` ADD `log_id` int(11) NOT NULL AUTO_INCREMENT, ADD PRIMARY KEY (`log_id`);", false);
-                break;
-            }
-        }
     }
 
     $sql = "insert into `{$g5['g5_shop_post_log_table']}`
@@ -2672,20 +2850,6 @@ function add_order_post_log($msg='', $code='error'){
 
     if( $result = sql_query($sql, false) ){
         sql_query(" delete from {$g5['g5_shop_post_log_table']} where ol_datetime < '".date('Y-m-d H:i:s', strtotime('-15 day', G5_SERVER_TIME))."' ", false);
-    } else {
-        if(!sql_query(" DESC {$g5['g5_shop_post_log_table']} ", false)) {
-            sql_query(" CREATE TABLE IF NOT EXISTS `{$g5['g5_shop_post_log_table']}` (
-                          `log_id` int(11) NOT NULL AUTO_INCREMENT,
-                          `oid` bigint(20) unsigned NOT NULL,
-                          `mb_id` varchar(255) NOT NULL DEFAULT '',
-                          `post_data` text NOT NULL,
-                          `ol_code` varchar(255) NOT NULL DEFAULT '',
-                          `ol_msg` text NOT NULL,
-                          `ol_datetime` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
-                          `ol_ip` varchar(25) NOT NULL DEFAULT '',
-                          PRIMARY KEY (`log_id`)
-                        ) ENGINE=MyISAM DEFAULT CHARSET=utf8; ", false);
-        }
     }
 }
 
@@ -2722,7 +2886,7 @@ function is_inicis_order_pay($type){
     return false;
 }
 
-function get_item_images_info($it, $size=array(), $image_width, $image_height){
+function get_item_images_info($it, $size=array(), $image_width=0, $image_height=0){
     
     if( !(is_array($it) && $it) ) return array();
     $images = array();
@@ -2745,6 +2909,83 @@ function get_item_images_info($it, $size=array(), $image_width, $image_height){
     return $images; 
 }
 
+// 카테고리 전체 경로를 가져오는 함수 (예: 남성의류 > 상의 > 셔츠)
+function get_shop_category_path($ca_id, $separator = ' &gt; ')
+{
+    global $g5;
+    static $category_cache = array(); // 카테고리명 캐시
+    static $path_cache = array();     // 경로 캐시
+
+    if (!$ca_id) return '';
+
+    // 동일한 separator로 이미 조회한 경로가 있으면 캐시에서 반환
+    $cache_key = $ca_id . '|' . $separator;
+    if (isset($path_cache[$cache_key])) {
+        return $path_cache[$cache_key];
+    }
+
+    $path_arr = array();
+    $ca_id_len = strlen($ca_id);
+
+    // 카테고리 ID를 2자리씩 분할하여 각 단계의 카테고리명을 조회
+    for ($i = 2; $i <= $ca_id_len; $i += 2) {
+        $current_ca_id = substr($ca_id, 0, $i);
+
+        // 캐시에 없으면 DB 조회
+        if (!isset($category_cache[$current_ca_id])) {
+            $sql = " select ca_name from {$g5['g5_shop_category_table']} where ca_id = '$current_ca_id' ";
+            $row = sql_fetch($sql);
+            if ($row) {
+                $category_cache[$current_ca_id] = $row['ca_name'];
+            } else {
+                $category_cache[$current_ca_id] = '';
+            }
+        }
+
+        if ($category_cache[$current_ca_id]) {
+            $path_arr[] = $category_cache[$current_ca_id];
+        }
+    }
+
+    $result = implode($separator, $path_arr);
+    $path_cache[$cache_key] = $result; // 결과를 캐시에 저장
+
+    return $result;
+}
+
+function check_payment_method($od_settle_case) {
+    global $default;
+
+    $is_block = 0;
+
+    if ($od_settle_case === '무통장') {
+        if (! $default['de_bank_use']) {
+            $is_block = 1;
+        }
+    } else if ($od_settle_case === '계좌이체') {
+        if (! $default['de_iche_use']) {
+            $is_block = 1;
+        }
+    } else if ($od_settle_case === '가상계좌') {
+        if (! $default['de_vbank_use']) {
+            $is_block = 1;
+        }
+    } else if ($od_settle_case === '휴대폰') {
+        if (! $default['de_hp_use']) {
+            $is_block = 1;
+        }
+    } else if ($od_settle_case === '신용카드') {
+        if (! $default['de_card_use']) {
+            $is_block = 1;
+        }
+    }
+
+    if ($is_block) {
+        alert($od_settle_case.' 은 결제수단에서 사용이 금지되어 있습니다.', G5_SHOP_URL);
+        die('');
+    }
+}
+
 //결제방식 이름을 체크하여 치환 대상인 문자열은 따로 리턴합니다.
 function check_pay_name_replace($payname, $od=array(), $is_client=0){
 
@@ -2765,10 +3006,12 @@ function check_pay_name_replace($payname, $od=array(), $is_client=0){
         } else if( isset($od['od_pg']) && $od['od_pg'] === 'inicis' ){
             return 'KPAY';
         } else if( isset($od['od_pg']) && $od['od_pg'] === 'kcp' ){
-            if( isset($od['od_other_pay_type']) && $od['od_other_pay_type'] === 'OT16' ){
+            if( isset($od['od_other_pay_type']) && ($od['od_other_pay_type'] === 'OT16' || $od['od_other_pay_type'] === 'NHNKCP_NAVERMONEY')){
                 return '네이버페이_NHNKCP'.$add_str;
             } else if( isset($od['od_other_pay_type']) && ($od['od_other_pay_type'] === 'OT13' || $od['od_other_pay_type'] === 'NHNKCP_KAKAOMONEY') ){
                 return '카카오페이_NHNKCP'.$add_str;
+            } else if( isset($od['od_other_pay_type']) && $od['od_other_pay_type'] === 'OT21' ){
+                return '애플페이_NHNKCP'.$add_str;
             }
 
             return 'PAYCO'.$add_str;

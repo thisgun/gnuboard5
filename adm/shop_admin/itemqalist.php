@@ -4,6 +4,10 @@ include_once('./_common.php');
 
 auth_check_menu($auth, $sub_menu, "r");
 
+if (isset($sfl) && $sfl && !in_array($sfl, array('it_name','a.it_id'))) {
+    $sfl = '';
+}
+
 $g5['title'] = '상품문의';
 include_once (G5_ADMIN_PATH.'/admin.head.php');
 
@@ -27,6 +31,9 @@ if (!$sst) {
     $sst = "iq_id";
     $sod = "desc";
 }
+$allowed_sst = array('iq_id', 'a.it_id', 'it_name', 'iq_time');
+if ($sst && !in_array($sst, $allowed_sst)) $sst = 'iq_id';
+if ($sod && !in_array(strtolower($sod), array('asc', 'desc'))) $sod = '';
 
 $sql_common = "  from {$g5['g5_shop_item_qa_table']} a
                  left join {$g5['g5_shop_item_table']} b on (a.it_id = b.it_id)
@@ -75,7 +82,9 @@ $listall = '<a href="'.$_SERVER['SCRIPT_NAME'].'" class="ov_listall">전체목�
         $nbsp = "";
         for ($i=0; $i<$len; $i++) $nbsp .= "&nbsp;&nbsp;&nbsp;";
         $selected = ($row1['ca_id'] == $sca) ? ' selected="selected"' : '';
-        echo '<option value="'.$row1['ca_id'].'"'.$selected.'>'.$nbsp.$row1['ca_name'].'</option>'.PHP_EOL;
+        // 전체 카테고리 경로 표시
+        $category_path = function_exists('get_shop_category_path') ? get_shop_category_path($row1['ca_id']) : $row1['ca_name'];
+        echo '<option value="'.$row1['ca_id'].'"'.$selected.'>'.$nbsp.$category_path.'</option>'.PHP_EOL;
     }
     ?>
 </select>

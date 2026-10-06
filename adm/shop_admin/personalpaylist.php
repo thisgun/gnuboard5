@@ -6,6 +6,11 @@ auth_check_menu($auth, $sub_menu, "r");
 
 $sql_common = " from {$g5['g5_shop_personalpay_table']} ";
 
+$allowed_sfl = array('pp_id', 'pp_name', 'od_id');
+if (!in_array($sfl, $allowed_sfl)) {
+    $sfl = 'pp_id';
+}
+
 $sql_search = " where (1) ";
 if ($stx) {
     $sql_search .= " and ( ";
@@ -27,6 +32,9 @@ if (!$sst) {
     $sst  = "pp_id";
     $sod = "desc";
 }
+$allowed_sst = array('pp_id', 'od_id', 'pp_receipt_time');
+if ($sst && !in_array($sst, $allowed_sst)) $sst = 'pp_id';
+if ($sod && !in_array(strtolower($sod), array('asc', 'desc'))) $sod = '';
 $sql_order = " order by {$sst} {$sod} ";
 
 $sql = " select count(*) as cnt

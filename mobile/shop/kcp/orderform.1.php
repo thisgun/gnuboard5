@@ -1,8 +1,8 @@
 <?php
 if (!defined("_GNUBOARD_")) exit; // 개별 페이지 접근 불가
 
-// 무통장 입금만 사용할 때는 아래 코드 실행되지 않음 ( 카카오페이 또는 삼성페이도 사용 안하면 )
-if(!($default['de_iche_use'] || $default['de_vbank_use'] || $default['de_hp_use'] || $default['de_card_use'] || $default['de_samsung_pay_use'] || $is_kakaopay_use ))
+// 무통장 입금만 사용할 때는 아래 코드 실행되지 않음 ( 삼성페이도 사용 안하면 )
+if(!($default['de_iche_use'] || $default['de_vbank_use'] || $default['de_hp_use'] || $default['de_card_use'] || $default['de_samsung_pay_use'] ))
     return;
 
 $param_opt_1 = isset($_REQUEST['param_opt_1']) ? clean_xss_tags($_REQUEST['param_opt_1'], 1, 1) : '';
@@ -23,7 +23,11 @@ $param_opt_3 = isset($_REQUEST['param_opt_3']) ? clean_xss_tags($_REQUEST['param
 <input type="hidden" name="settle_method" value="">
 <input type="hidden" name="payco_direct"   value="">      <!-- PAYCO 결제창 호출 -->
 <input type="hidden" name="naverpay_direct" value="A" >    <!-- NAVERPAY 결제창 호출 -->
+<?php if(isset($default['de_easy_pay_services']) && in_array('used_nhnkcp_naverpay_point', explode(',', $default['de_easy_pay_services'])) ){     // 네이버페이 포인트 결제 옵션 ?>
+<input type="hidden" name="naverpay_point_direct" value="Y">    <!-- 네이버페이 포인트 결제를 하려면 naverpay_point_direct 를 Y  -->
+<?php } ?>
 <input type="hidden" name="kakaopay_direct" value="A" >    <!-- KAKAOPAY 결제창 호출 -->
+<input type="hidden" name="applepay_direct" value="A" >    <!-- APPLEPAY 결제창 호출 -->
 <!-- 주문번호 -->
 <input type="hidden" name="ordr_idxx" value="<?php echo $od_id; ?>">
 <!-- 인증수단(영문 소문자) * 반드시 대소문자 구분 -->

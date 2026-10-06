@@ -6,6 +6,16 @@ auth_check_menu($auth, $sub_menu, "w");
 
 check_admin_token();
 
+$od_id = isset($_POST['od_id']) ? safe_replace_regex($_POST['od_id'], 'od_id') : '';
+$ct_status = isset($_POST['ct_status']) ? clean_xss_tags($_POST['ct_status'], 1, 1) : '';
+if ($ct_status === '' && isset($_POST['submit_ct_status'])) {
+    $ct_status = clean_xss_tags($_POST['submit_ct_status'], 1, 1);
+}
+$pg_cancel = isset($_POST['pg_cancel']) ? (int) $_POST['pg_cancel'] : 0;
+$nicepay_refund_acct_no = isset($_POST['RefundAcctNo']) ? preg_replace('/[^0-9]/', '', $_POST['RefundAcctNo']) : '';
+$nicepay_refund_bank_cd = isset($_POST['RefundBankCd']) ? preg_replace('/[^0-9]/', '', $_POST['RefundBankCd']) : '';
+$nicepay_refund_acct_nm = isset($_POST['RefundAcctNm']) ? trim(clean_xss_tags($_POST['RefundAcctNm'], 1, 1)) : '';
+
 $ct_chk_count = isset($_POST['ct_chk']) ? count($_POST['ct_chk']) : 0;
 if(!$ct_chk_count)
     alert('처리할 자료를 하나 이상 선택해 주십시오.');
@@ -13,10 +23,179 @@ if(!$ct_chk_count)
 $status_normal = array('주문','입금','준비','배송','완료');
 $status_cancel = array('취소','반품','품절');
 
-if (in_array($_POST['ct_status'], $status_normal) || in_array($_POST['ct_status'], $status_cancel)) {
+if (in_array($ct_status, $status_normal) || in_array($ct_status, $status_cancel)) {
     ; // 통과
 } else {
     alert('변경할 상태가 올바르지 않습니다.');
+}
+
+// SIRK 주문은 PG 취소를 호출하지 않고, 실제 취소를 확인한 운영자만 로컬 상태를 정리한다.
+if (in_array($ct_status, $status_cancel, true)) {
+    $sirk_order = sql_fetch(" select od_pg from {$g5['g5_shop_order_table']} where od_id = '" . sql_escape_string($od_id) . "' ");
+    if (isset($sirk_order['od_pg']) && $sirk_order['od_pg'] === 'KAKAOPAY') {
+        if ($pg_cancel || empty($_POST['sirk_cancel_confirmed'])) {
+            alert('SIRK 전용 카카오페이는 이니시스 상점관리자에서 실제 취소 여부를 확인한 뒤 주문 상태만 변경해 주십시오.');
+        }
+    }
+}
+
+// INIpay PRO 전체취소는 로컬 상품상태를 바꾸기 전에 PG 취소를 먼저 확정한다.
+// PG 취소 실패 후에도 주문만 취소되어 가상계좌 입금이 남는 상태를 방지한다.
+$inicis_pro_cancel_preprocessed = false;
+$inicis_pro_order_lock = '';
+if (in_array($_POST['ct_status'], $status_cancel)) {
+    $selected_ct_ids = array();
+    $posted_ct_count = isset($_POST['ct_id']) && is_array($_POST['ct_id']) ? count($_POST['ct_id']) : 0;
+    for ($pre_i = 0; $pre_i < $posted_ct_count; $pre_i++) {
+        $pre_k = isset($_POST['ct_chk'][$pre_i]) ? (int) $_POST['ct_chk'][$pre_i] : -1;
+        if ($pre_k < 0 || !isset($_POST['ct_id'][$pre_k]))
+            continue;
+        $pre_ct_id = (int) $_POST['ct_id'][$pre_k];
+        if ($pre_ct_id > 0)
+            $selected_ct_ids[$pre_ct_id] = $pre_ct_id;
+    }
+
+    if (count($selected_ct_ids)) {
+        $selected_ct_sql = implode(',', array_values($selected_ct_ids));
+        $future = sql_fetch(" select count(*) as total_count,
+                                    sum(if(ct_status in ('취소','반품','품절') or ct_id in ($selected_ct_sql), 1, 0)) as cancel_count
+                               from {$g5['g5_shop_cart_table']}
+                              where od_id = '".sql_escape_string($od_id)."' ");
+        if ((int) $future['total_count'] > 0 && (int) $future['total_count'] === (int) $future['cancel_count']) {
+            $pre_od = sql_fetch(" select * from {$g5['g5_shop_order_table']} where od_id = '".sql_escape_string($od_id)."' ");
+            if (!empty($pre_od['od_tno']) && $pre_od['od_pg'] === 'inicis') {
+                include_once(G5_SHOP_PATH.'/inicis/pro/inicis_pro.lib.php');
+                $pro_tables = inicis_pro_audit_tables();
+                $pro_summary = sql_fetch(" select * from `{$pro_tables['summary']}`
+                                            where ip_oid = '".sql_escape_string($pre_od['od_id'])."'
+                                              and ip_tid = '".sql_escape_string($pre_od['od_tno'])."' ", false);
+                if (!empty($pro_summary['ip_id'])) {
+                    $inicis_pro_order_lock = inicis_pro_lock($pre_od['od_id']);
+                    if ($inicis_pro_order_lock === '')
+                        alert('동일 주문의 결제 또는 통보 처리가 진행 중입니다. 잠시 후 다시 취소해 주십시오.');
+
+                    // KG이니시스 상점관리자에서 이미 취소한 거래이면 PG 취소 없이 주문 취소만 진행한다.
+                    $pre_inquiry = inicis_pro_inquiry($pre_od['od_tno'], $pre_od['od_id'], $pro_summary);
+                    $pre_inquiry_data = isset($pre_inquiry['data']) && is_array($pre_inquiry['data']) ? $pre_inquiry['data'] : array();
+                    $pre_pg_status = isset($pre_inquiry_data['status']) ? strtoupper(preg_replace('/[^A-Za-z0-9_]/', '', (string) $pre_inquiry_data['status'])) : '';
+
+                    if (!empty($pre_inquiry['success']) && in_array($pre_pg_status, array('1', 'C', 'CANCEL', 'DEPOSIT_CANCELED', 'REFUND_COMPLETED'))) {
+                        inicis_pro_save_inquiry($pre_od['od_id'], $pre_inquiry, 'admin');
+                        inicis_pro_audit_write($pre_od['od_id'], 'cancel', 'canceled', array(
+                            'tid' => $pre_od['od_tno'],
+                            'mid' => $pro_summary['ip_mid'],
+                            'amount' => isset($pro_summary['ip_amount']) ? (int) $pro_summary['ip_amount'] : 0,
+                            'pay_type' => isset($pro_summary['ip_pay_type']) ? $pro_summary['ip_pay_type'] : '',
+                            'source' => 'admin',
+                            'code' => $pre_pg_status,
+                            'message' => 'KG이니시스에서 이미 취소된 거래로 확인되어 주문 취소만 진행합니다.'
+                        ));
+                        $inicis_pro_cancel_preprocessed = true;
+                    } else {
+                        $pre_refunded = (int) $pre_od['od_refund_price'];
+                        $pre_remaining = (int) $pre_od['od_receipt_price'] - $pre_refunded;
+
+                        if ($pre_refunded > 0 && $pre_remaining <= 0) {
+                            // 이전 부분취소로 결제금액이 모두 환불된 주문은 PG 취소 없이 주문 취소만 진행한다.
+                            inicis_pro_audit_write($pre_od['od_id'], 'cancel', 'canceled', array(
+                                'tid' => $pre_od['od_tno'],
+                                'mid' => $pro_summary['ip_mid'],
+                                'amount' => isset($pro_summary['ip_amount']) ? (int) $pro_summary['ip_amount'] : 0,
+                                'pay_type' => isset($pro_summary['ip_pay_type']) ? $pro_summary['ip_pay_type'] : '',
+                                'source' => 'admin',
+                                'message' => '이전 부분취소로 결제금액이 모두 환불되어 주문 취소만 진행합니다.'
+                            ));
+                            $inicis_pro_cancel_preprocessed = true;
+                        } elseif (!isset($_POST['pg_cancel']) || (int) $_POST['pg_cancel'] !== 1) {
+                            // PG 승인취소 없이 주문만 취소하는 선택을 이력에 남긴다. 결제는 KG이니시스에 승인 상태로 남는다.
+                            inicis_pro_audit_write($pre_od['od_id'], 'cancel', 'canceled', array(
+                                'tid' => $pre_od['od_tno'],
+                                'mid' => $pro_summary['ip_mid'],
+                                'amount' => isset($pro_summary['ip_amount']) ? (int) $pro_summary['ip_amount'] : 0,
+                                'pay_type' => isset($pro_summary['ip_pay_type']) ? $pro_summary['ip_pay_type'] : '',
+                                'source' => 'admin',
+                                'message' => 'PG 승인취소 없이 주문만 취소했습니다. 결제는 KG이니시스에 남아 있습니다.',
+                                'event_only' => '1'
+                            ));
+                        } else {
+                            $pro_environment = !empty($pro_summary['ip_environment']) ? $pro_summary['ip_environment'] : inicis_pro_environment();
+                            if ($pro_summary['ip_mid'] !== inicis_pro_get_mid(!empty($pro_summary['ip_pay_type']) ? $pro_summary['ip_pay_type'] : null) || $pro_environment !== inicis_pro_environment())
+                                alert('거래 당시 MID 또는 결제환경과 현재 설정이 달라 PG 취소를 실행할 수 없습니다. KG이니시스 상점관리자에서 원거래를 확인해 주십시오.');
+
+                            include_once(G5_SHOP_PATH.'/settle_inicis.inc.php');
+                            $pre_cancel_args = array(
+                                'paymethod' => get_type_inicis_paymethod($pre_od['od_settle_case']),
+                                'tid' => $pre_od['od_tno'],
+                                'mid' => $pro_summary['ip_mid'],
+                                'audit_oid' => $pre_od['od_id'],
+                                'audit_source' => 'admin',
+                                'msg' => '쇼핑몰 운영자 승인 취소',
+                                'url' => $pro_environment === 'test' ? 'https://stginiapi.inicis.com/api/v1/refund' : 'https://iniapi.inicis.com/api/v1/refund'
+                            );
+                            // 부분취소 이력이 있는 거래는 전체취소 요청이 거부되므로 잔여 금액을 부분취소로 처리한다.
+                            $pre_cancel_is_part = $pre_refunded > 0 && $pre_remaining > 0;
+                            if ($pre_cancel_is_part) {
+                                $pre_cancel_args['msg'] = '쇼핑몰 운영자 승인 취소(잔여금액)';
+                                $pre_cancel_args['price'] = $pre_remaining;
+                                $pre_cancel_args['confirmPrice'] = 0;
+                            }
+                            $pre_cancel_response = inicis_tid_cancel($pre_cancel_args, $pre_cancel_is_part);
+                            $pre_cancel_result = json_decode($pre_cancel_response, true);
+                            if (!isset($pre_cancel_result['resultCode']) || $pre_cancel_result['resultCode'] !== '00') {
+                                $pre_cancel_code = !empty($pre_cancel_result['resultCode']) ? $pre_cancel_result['resultCode'] : 'COMMUNICATION_FAILED';
+                                $pre_cancel_message = !empty($pre_cancel_result['resultMsg']) ? $pre_cancel_result['resultMsg'] : 'KG이니시스 취소 응답을 확인하지 못했습니다.';
+                                alert($pre_cancel_message.' 코드 : '.$pre_cancel_code);
+                            }
+                            if ($pre_cancel_is_part) {
+                                inicis_pro_audit_write($pre_od['od_id'], 'cancel', 'canceled', array(
+                                    'tid' => $pre_od['od_tno'],
+                                    'mid' => $pro_summary['ip_mid'],
+                                    'amount' => isset($pro_summary['ip_amount']) ? (int) $pro_summary['ip_amount'] : 0,
+                                    'pay_type' => isset($pro_summary['ip_pay_type']) ? $pro_summary['ip_pay_type'] : '',
+                                    'source' => 'admin',
+                                    'code' => '00',
+                                    'message' => '잔여 금액 부분취소로 전체취소를 완료했습니다.'
+                                ));
+                            }
+                            $inicis_pro_cancel_preprocessed = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+if ($pg_cancel === 1 && in_array($ct_status, $status_cancel)) {
+    $nicepay_refund_order = sql_fetch(" select od_id, od_pg, od_settle_case, od_status, od_receipt_price from {$g5['g5_shop_order_table']} where od_id = '$od_id' ");
+
+    if (isset($nicepay_refund_order['od_id']) && $nicepay_refund_order['od_pg'] === 'nicepay' && $nicepay_refund_order['od_settle_case'] === '가상계좌' && is_cancel_shop_pg_order($nicepay_refund_order)) {
+        $nicepay_refund_required = ((int) $nicepay_refund_order['od_receipt_price'] > 0);
+        $nicepay_refund_inputted = ($nicepay_refund_acct_no !== '' || $nicepay_refund_bank_cd !== '' || $nicepay_refund_acct_nm !== '');
+
+        if (!$nicepay_refund_required && !$nicepay_refund_inputted) {
+            $nicepay_refund_acct_no = '';
+            $nicepay_refund_bank_cd = '';
+            $nicepay_refund_acct_nm = '';
+        } else {
+            if ($nicepay_refund_acct_no === '' || strlen($nicepay_refund_acct_no) > 16) {
+                alert('나이스페이 가상계좌 취소를 위해 환불계좌번호를 숫자 16자리 이하로 입력해 주십시오.');
+            }
+
+            if (!preg_match('/^[0-9]{3}$/', $nicepay_refund_bank_cd)) {
+                alert('나이스페이 가상계좌 취소를 위해 환불계좌코드를 숫자 3자리로 입력해 주십시오.');
+            }
+
+            if ($nicepay_refund_acct_nm === '') {
+                alert('나이스페이 가상계좌 취소를 위해 환불계좌주명을 입력해 주십시오.');
+            }
+
+            $nicepay_refund_acct_nm_euckr = function_exists('iconv') ? @iconv('UTF-8', 'EUC-KR//IGNORE', $nicepay_refund_acct_nm) : $nicepay_refund_acct_nm;
+            if (strlen($nicepay_refund_acct_nm_euckr) > 10) {
+                alert('나이스페이 환불계좌주명은 10 byte 이하로 입력해 주십시오.');
+            }
+        }
+    }
 }
 
 $search = isset($_REQUEST['search']) ? get_search_string($_REQUEST['search']) : '';
@@ -143,8 +322,10 @@ for ($i=0; $i<$cnt; $i++)
     $now = G5_TIME_YMDHIS;
     $ct_history="\n$ct_status|{$member['mb_id']}|$now|$REMOTE_ADDR";
 
+    $complete_time_sql = get_cart_complete_time_sql($ct_status);
     $sql = " update {$g5['g5_shop_cart_table']}
-                set ct_point_use  = '$point_use',
+                set ct_complete_time = $complete_time_sql,
+                    ct_point_use  = '$point_use',
                     ct_stock_use  = '$stock_use',
                     ct_status     = '$ct_status',
                     ct_history    = CONCAT(ct_history,'$ct_history')
@@ -155,6 +336,11 @@ for ($i=0; $i<$cnt; $i++)
     // it_id를 배열에 저장
     if($ct_status == '주문' || $ct_status == '취소' || $ct_status == '반품' || $ct_status == '품절' || $ct_status == '완료')
         $arr_it_id[] = $ct['it_id'];
+}
+
+// 완료 처리 직후 실행하여 0일 설정도 즉시 적용한다.
+if ($ct_status == '완료') {
+    save_order_point();
 }
 
 // 상품 판매수량 반영
@@ -172,7 +358,7 @@ if(is_array($arr_it_id) && !empty($arr_it_id)) {
 
 // 장바구니 상품 모두 취소일 경우 주문상태 변경
 $cancel_change = false;
-if (in_array($_POST['ct_status'], $status_cancel)) {
+if (in_array($ct_status, $status_cancel)) {
     $sql = " select count(*) as od_count1,
                     SUM(IF(ct_status = '취소' OR ct_status = '반품' OR ct_status = '품절', 1, 0)) as od_count2
                 from {$g5['g5_shop_cart_table']}
@@ -191,7 +377,7 @@ if (in_array($_POST['ct_status'], $status_cancel)) {
             $sql = " select * from {$g5['g5_shop_order_table']} where od_id = '$od_id' ";
             $od = sql_fetch($sql);
 
-            if($od['od_tno'] && ($od['od_settle_case'] == '신용카드' || $od['od_settle_case'] == '간편결제' || $od['od_settle_case'] == 'KAKAOPAY') || ($od['od_pg'] == 'inicis' && is_inicis_order_pay($od['od_settle_case']) )) {
+            if ($od['od_tno'] && is_cancel_shop_pg_order($od)) {
                 switch($od['od_pg']) {
                     case 'lg':
                         include_once(G5_SHOP_PATH.'/settle_lg.inc.php');
@@ -220,56 +406,74 @@ if (in_array($_POST['ct_status'], $status_cancel)) {
                             $pg_res_msg = $xpay->Response_Msg();
                         }
                         break;
+                    case 'toss':
+                        $cancel_msg = '쇼핑몰 운영자 승인 취소';
+                        include_once(G5_SHOP_PATH.'/toss/toss_cancel.php');
+                        break;
                     case 'inicis':
                         include_once(G5_SHOP_PATH.'/settle_inicis.inc.php');
-                        $cancel_msg = iconv_euckr('쇼핑몰 운영자 승인 취소');
+                        $cancel_msg = '쇼핑몰 운영자 승인 취소';
 
-                        /*********************
-                         * 3. 취소 정보 설정 *
-                         *********************/
-                        $inipay->SetField("type",      "cancel");                        // 고정 (절대 수정 불가)
-                        $inipay->SetField("mid",       $default['de_inicis_mid']);       // 상점아이디
-                        /**************************************************************************************************
-                         * admin 은 키패스워드 변수명입니다. 수정하시면 안됩니다. 1111의 부분만 수정해서 사용하시기 바랍니다.
-                         * 키패스워드는 상점관리자 페이지(https://iniweb.inicis.com)의 비밀번호가 아닙니다. 주의해 주시기 바랍니다.
-                         * 키패스워드는 숫자 4자리로만 구성됩니다. 이 값은 키파일 발급시 결정됩니다.
-                         * 키패스워드 값을 확인하시려면 상점측에 발급된 키파일 안의 readme.txt 파일을 참조해 주십시오.
-                         **************************************************************************************************/
-                        $inipay->SetField("admin",     $default['de_inicis_admin_key']); //비대칭 사용키 키패스워드
-                        $inipay->SetField("tid",       $od['od_tno']);                   // 취소할 거래의 거래아이디
-                        $inipay->SetField("cancelmsg", $cancel_msg);                     // 취소사유
+                        if ($inicis_pro_cancel_preprocessed) {
+                            $result = array('resultCode' => '00', 'resultMsg' => 'INIpay PRO PG 취소 선처리 완료');
+                        } else {
+                            $args = array(
+                                'paymethod' => get_type_inicis_paymethod($od['od_settle_case']),
+                                'tid' => $od['od_tno'],
+                                'msg' => $cancel_msg
+                            );
 
-                        /****************
-                         * 4. 취소 요청 *
-                         ****************/
-                        $inipay->startAction();
-
-                        /****************************************************************
-                         * 5. 취소 결과                                           	*
-                         *                                                        	*
-                         * 결과코드 : $inipay->getResult('ResultCode') ("00"이면 취소 성공)  	*
-                         * 결과내용 : $inipay->getResult('ResultMsg') (취소결과에 대한 설명) 	*
-                         * 취소날짜 : $inipay->getResult('CancelDate') (YYYYMMDD)          	*
-                         * 취소시각 : $inipay->getResult('CancelTime') (HHMMSS)            	*
-                         * 현금영수증 취소 승인번호 : $inipay->getResult('CSHR_CancelNum')    *
-                         * (현금영수증 발급 취소시에만 리턴됨)                          *
-                         ****************************************************************/
-
-                        $res_cd  = $inipay->getResult('ResultCode');
-                        $res_msg = $inipay->getResult('ResultMsg');
-
-                        if($res_cd != '00') {
-                            $pg_res_cd = $res_cd;
-                            $pg_res_msg = iconv_utf8($res_msg);
+                            $response = inicis_tid_cancel($args);
+                            $result = json_decode($response, true);
                         }
+
+                        if (isset($result['resultCode'])) {
+                            if ($result['resultCode'] != '00') {
+                                $pg_res_cd = $result['resultCode'];
+                                $pg_res_msg = $result['resultMsg'];
+                            }
+                        } else {
+                            $pg_res_cd = '';
+                            $pg_res_msg = 'curl 로 데이터를 받지 못했습니다.';
+                        }
+
+                        break;
+                    case 'nicepay':
+                        include_once(G5_SHOP_PATH.'/settle_nicepay.inc.php');
+                        $cancel_msg = '쇼핑몰 운영자 승인 취소';
+                        
+                        $tno = $od['od_tno'];
+                        
+                        $cancelAmt = (int)$od['od_receipt_price'];
+                        if($od['od_settle_case'] == '가상계좌' && $od['od_status'] == '주문' && $cancelAmt == 0)
+                            $cancelAmt = (int)$od['od_misu'];
+
+                        // 0:전체 취소, 1:부분 취소(별도 계약 필요)
+                        $partialCancelCode = 0;
+
+                        if($cancelAmt <= 0) {
+                            $pg_res_cd = 'NO_CANCEL_AMT';
+                            $pg_res_msg = '취소 요청금액이 없습니다.';
+                            break;
+                        }
+
+                        include G5_SHOP_PATH.'/nicepay/cancel_process.php';
+
+                        if (isset($result['ResultCode'])) {
+                            // 실패했다면
+                            if (! in_array($result['ResultCode'], array('2001', '2211'), true)) {
+                                $pg_res_cd = $result['ResultCode'];
+                                $pg_res_msg = $result['ResultMsg'];
+                            }
+                        } else {
+                            $pg_res_cd = '';
+                            $pg_res_msg = 'curl 로 데이터를 받지 못하거나 통신에 실패했습니다.';
+                        }
+
                         break;
                     case 'KAKAOPAY':
-                        include_once(G5_SHOP_PATH.'/settle_kakaopay.inc.php');
-                        $_REQUEST['TID']               = $od['od_tno'];
-                        $_REQUEST['Amt']               = $od['od_receipt_price'];
-                        $_REQUEST['CancelMsg']         = '쇼핑몰 운영자 승인 취소';
-                        $_REQUEST['PartialCancelCode'] = 0;
-                        include G5_SHOP_PATH.'/kakaopay/kakaopay_cancel.php';
+                        $pg_res_cd = 'SIRK_RETIRED';
+                        $pg_res_msg = 'SIRK 전용 카카오페이는 이니시스 상점관리자에서 취소해 주십시오.';
                         break;
                     default:
                         include_once(G5_SHOP_PATH.'/settle_kcp.inc.php');
@@ -315,7 +519,7 @@ if (in_array($_POST['ct_status'], $status_cancel)) {
 
                 // PG 취소요청 성공했으면
                 if($pg_res_cd == '') {
-                    $pg_cancel_log = ' PG 신용카드 승인취소 처리';
+                    $pg_cancel_log = ' PG '.$od['od_settle_case'].' 승인취소 처리';
                     $sql = " update {$g5['g5_shop_order_table']}
                                 set od_refund_price = '{$od['od_receipt_price']}'
                                 where od_id = '$od_id' ";
@@ -325,7 +529,7 @@ if (in_array($_POST['ct_status'], $status_cancel)) {
         }
 
         // 관리자 주문취소 로그
-        $mod_history .= G5_TIME_YMDHIS.' '.$member['mb_id'].' 주문'.$_POST['ct_status'].' 처리'.$pg_cancel_log."\n";
+        $mod_history .= G5_TIME_YMDHIS.' '.$member['mb_id'].' 주문'.$ct_status.' 처리'.$pg_cancel_log."\n";
     }
 }
 
@@ -353,8 +557,8 @@ if ($mod_history) { // 주문변경 히스토리 기록
 if($cancel_change) {
     $sql .= " , od_status = '취소' "; // 주문상품 모두 취소, 반품, 품절이면 주문 취소
 } else {
-    if (isset($_POST['ct_status']) && in_array($_POST['ct_status'], $status_normal)) { // 정상인 주문상태만 기록
-        $sql .= " , od_status = '{$_POST['ct_status']}' ";
+    if ($ct_status && in_array($ct_status, $status_normal)) { // 정상인 주문상태만 기록
+        $sql .= " , od_status = '$ct_status' ";
     }
 }
 
@@ -364,6 +568,9 @@ sql_query($sql);
 $qstr = "sort1=$sort1&amp;sort2=$sort2&amp;sel_field=$sel_field&amp;search=$search&amp;page=$page";
 
 $url = "./orderform.php?od_id=$od_id&amp;$qstr";
+
+if ($inicis_pro_order_lock !== '')
+    inicis_pro_unlock($inicis_pro_order_lock);
 
 // 신용카드 취소 때 오류가 있으면 알림
 if($pg_cancel == 1 && $pg_res_cd && $pg_res_msg) {

@@ -29,8 +29,11 @@ if($board['bo_use_category']) {
 
 $wr_subject = '';
 if (isset($_POST['wr_subject'])) {
-    $wr_subject = substr(trim($_POST['wr_subject']),0,255);
+    $wr_subject = cut_str(trim($_POST['wr_subject']), 255, '');
     $wr_subject = preg_replace("#[\\\]+$#", "", $wr_subject);
+    if (function_exists('normalize_utf8_string')) {
+        $wr_subject = normalize_utf8_string($wr_subject);
+    }
 }
 if ($wr_subject == '') {
     $msg[] = '<strong>제목</strong>을 입력하세요.';
@@ -40,6 +43,9 @@ $wr_content = '';
 if (isset($_POST['wr_content'])) {
     $wr_content = substr(trim($_POST['wr_content']),0,65536);
     $wr_content = preg_replace("#[\\\]+$#", "", $wr_content);
+    if (function_exists('normalize_utf8_string')) {
+        $wr_content = normalize_utf8_string($wr_content);
+    }
 }
 if ($wr_content == '') {
     $msg[] = '<strong>내용</strong>을 입력하세요.';
@@ -90,6 +96,39 @@ if ($w == 'u' || $w == 'r') {
     }
 }
 
+// 수정 권한은 스킨 및 저장 처리 전에 검증한다.
+if ($w == 'u') {
+    if (($is_member || $is_admin) && (get_session('ss_bo_table') != $bo_table || get_session('ss_wr_id') != $wr_id)) {
+        alert('올바른 방법으로 수정하여 주십시오.', get_pretty_url($bo_table));
+    }
+
+    $return_url = get_pretty_url($bo_table, $wr_id);
+
+    if ($is_admin == 'super') // 최고관리자 통과
+        ;
+    else if ($is_admin == 'group') { // 그룹관리자
+        $mb = get_member($wr['mb_id']);
+        if ($member['mb_id'] != $group['gr_admin']) // 자신이 관리하는 그룹인가?
+            alert('자신이 관리하는 그룹의 게시판이 아니므로 수정할 수 없습니다.', $return_url);
+        else if ($member['mb_level'] < $mb['mb_level']) // 자신의 레벨이 크거나 같다면 통과
+            alert('자신의 권한보다 높은 권한의 회원이 작성한 글은 수정할 수 없습니다.', $return_url);
+    } else if ($is_admin == 'board') { // 게시판관리자이면
+        $mb = get_member($wr['mb_id']);
+        if ($member['mb_id'] != $board['bo_admin']) // 자신이 관리하는 게시판인가?
+            alert('자신이 관리하는 게시판이 아니므로 수정할 수 없습니다.', $return_url);
+        else if ($member['mb_level'] < $mb['mb_level']) // 자신의 레벨이 크거나 같다면 통과
+            alert('자신의 권한보다 높은 권한의 회원이 작성한 글은 수정할 수 없습니다.', $return_url);
+    } else if ($member['mb_id']) {
+        if ($member['mb_id'] != $wr['mb_id'])
+            alert('자신의 글이 아니므로 수정할 수 없습니다.', $return_url);
+    } else {
+        if (!g5_has_write_edit_auth($bo_table, $wr))
+            alert('비밀번호 확인 후 다시 수정하여 주십시오.', $return_url);
+        if ($wr['mb_id'])
+            alert('로그인 후 수정하세요.', G5_BBS_URL.'/login.php?url='.urlencode($return_url));
+    }
+}
+
 // 외부에서 글을 등록할 수 있는 버그가 존재하므로 비밀글은 사용일 경우에만 가능해야 함
 if (!$is_admin && !$board['bo_use_secret'] && (stripos($_POST['html'], 'secret') !== false || stripos($_POST['secret'], 'secret') !== false || stripos($_POST['mail'], 'secret') !== false)) {
 	alert('비밀글 미사용 게시판 이므로 비밀글로 등록할 수 없습니다.');
@@ -128,6 +167,15 @@ for ($i=1; $i<=10; $i++) {
     $$var = "";
     if (isset($_POST['wr_'.$i]) && settype($_POST['wr_'.$i], 'string')) {
         $$var = trim($_POST['wr_'.$i]);
+    }
+}
+
+if (isset($_FILES['bf_file']['name']) && is_array($_FILES['bf_file']['name'])) {
+    foreach ($_FILES['bf_file']['name'] as $filename) {
+        $filename = get_safe_filename($filename);
+        if (is_disallowed_active_filename($filename)) {
+            alert('허용되지 않는 파일 확장자입니다.');
+        }
     }
 }
 
@@ -235,12 +283,13 @@ if ($w == '' || $w == 'r') {
     } else {
         $mb_id = '';
         // 비회원의 경우 이름이 누락되는 경우가 있음
-        $wr_name = clean_xss_tags(trim($_POST['wr_name']));
+        $wr_name = addslashes(clean_xss_tags(stripslashes(trim($_POST['wr_name']))));
+        $wr_name = preg_replace("#[\\\]+$#", "", $wr_name);
         if (!$wr_name)
             alert('이름은 필히 입력하셔야 합니다.');
         $wr_password = get_encrypt_string($wr_password);
         $wr_email = get_email_address(trim($_POST['wr_email']));
-        $wr_homepage = clean_xss_tags($wr_homepage);
+        $wr_homepage = addslashes(clean_xss_tags(stripslashes($wr_homepage)));
     }
 
     if ($w == 'r') {
@@ -252,12 +301,14 @@ if ($w == '' || $w == 'r') {
         $wr_num = $write['wr_num'];
         $wr_reply = $reply;
     } else {
-        $wr_num = get_next_num($write_table);
+        // get_next_num 함수는 mysql 지연시 중복이 될수 있는 문제로 더 이상 사용하지 않습니다.
+        // $wr_num = get_next_num($write_table);
+        $wr_num = 0;
         $wr_reply = '';
     }
-
+    
     $sql = " insert into $write_table
-                set wr_num = '$wr_num',
+                set wr_num = " . ($w == 'r' ? "'$wr_num'" : "(SELECT IFNULL(MIN(wr_num) - 1, -1) FROM $write_table as sq) ") . ",
                      wr_reply = '$wr_reply',
                      wr_comment = 0,
                      ca_name = '$ca_name',
@@ -317,34 +368,6 @@ if ($w == '' || $w == 'r') {
         insert_point($member['mb_id'], $board['bo_comment_point'], "{$board['bo_subject']} {$wr_id} 글답변", $bo_table, $wr_id, '쓰기');
     }
 }  else if ($w == 'u') {
-    if (get_session('ss_bo_table') != $_POST['bo_table'] || get_session('ss_wr_id') != $_POST['wr_id']) {
-        alert('올바른 방법으로 수정하여 주십시오.', get_pretty_url($bo_table));
-    }
-
-    $return_url = get_pretty_url($bo_table, $wr_id);
-
-    if ($is_admin == 'super') // 최고관리자 통과
-        ;
-    else if ($is_admin == 'group') { // 그룹관리자
-        $mb = get_member($write['mb_id']);
-        if ($member['mb_id'] != $group['gr_admin']) // 자신이 관리하는 그룹인가?
-            alert('자신이 관리하는 그룹의 게시판이 아니므로 수정할 수 없습니다.', $return_url);
-        else if ($member['mb_level'] < $mb['mb_level']) // 자신의 레벨이 크거나 같다면 통과
-            alert('자신의 권한보다 높은 권한의 회원이 작성한 글은 수정할 수 없습니다.', $return_url);
-    } else if ($is_admin == 'board') { // 게시판관리자이면
-        $mb = get_member($write['mb_id']);
-        if ($member['mb_id'] != $board['bo_admin']) // 자신이 관리하는 게시판인가?
-            alert('자신이 관리하는 게시판이 아니므로 수정할 수 없습니다.', $return_url);
-        else if ($member['mb_level'] < $mb['mb_level']) // 자신의 레벨이 크거나 같다면 통과
-            alert('자신의 권한보다 높은 권한의 회원이 작성한 글은 수정할 수 없습니다.', $return_url);
-    } else if ($member['mb_id']) {
-        if ($member['mb_id'] != $write['mb_id'])
-            alert('자신의 글이 아니므로 수정할 수 없습니다.', $return_url);
-    } else {
-        if ($write['mb_id'])
-            alert('로그인 후 수정하세요.', G5_BBS_URL.'/login.php?url='.urlencode($return_url));
-    }
-
     if ($member['mb_id']) {
         // 자신의 글이라면
         if ($member['mb_id'] === $wr['mb_id']) {
@@ -354,16 +377,17 @@ if ($w == '' || $w == 'r') {
             $wr_homepage = addslashes(clean_xss_tags($member['mb_homepage']));
         } else {
             $mb_id = $wr['mb_id'];
-            if(isset($_POST['wr_name']) && $_POST['wr_name'])
-                $wr_name = clean_xss_tags(trim($_POST['wr_name']));
-            else
+            if(isset($_POST['wr_name']) && $_POST['wr_name']) {
+                $wr_name = addslashes(clean_xss_tags(stripslashes(trim($_POST['wr_name']))));
+                $wr_name = preg_replace("#[\\\]+$#", "", $wr_name);
+            } else
                 $wr_name = addslashes(clean_xss_tags($wr['wr_name']));
             if(isset($_POST['wr_email']) && $_POST['wr_email'])
                 $wr_email = get_email_address(trim($_POST['wr_email']));
             else
                 $wr_email = addslashes($wr['wr_email']);
             if(isset($_POST['wr_homepage']) && $_POST['wr_homepage'])
-                $wr_homepage = addslashes(clean_xss_tags($_POST['wr_homepage']));
+                $wr_homepage = addslashes(clean_xss_tags(stripslashes($_POST['wr_homepage'])));
             else
                 $wr_homepage = addslashes(clean_xss_tags($wr['wr_homepage']));
         }
@@ -371,7 +395,8 @@ if ($w == '' || $w == 'r') {
         $mb_id = "";
         // 비회원의 경우 이름이 누락되는 경우가 있음
         if (!trim($wr_name)) alert("이름은 필히 입력하셔야 합니다.");
-        $wr_name = clean_xss_tags(trim($_POST['wr_name']));
+        $wr_name = addslashes(clean_xss_tags(stripslashes(trim($_POST['wr_name']))));
+        $wr_name = preg_replace("#[\\\]+$#", "", $wr_name);
         $wr_email = get_email_address(trim($_POST['wr_email']));
     }
 
@@ -408,6 +433,8 @@ if ($w == '' || $w == 'r') {
               where wr_id = '{$wr['wr_id']}' ";
     sql_query($sql);
 
+    set_session(g5_write_edit_auth_key($bo_table, $wr_id), '');
+
     // 분류가 수정되는 경우 해당되는 코멘트의 분류명도 모두 수정함
     // 코멘트의 분류를 수정하지 않으면 검색이 제대로 되지 않음
     $sql = " update {$write_table} set ca_name = '{$ca_name}' where wr_parent = '{$wr['wr_id']}' ";
@@ -422,7 +449,8 @@ if ($w == '' || $w == 'r') {
         }
     } else {
         $bo_notice = '';
-        for ($i=0; $i<count($notice_array); $i++)
+        $notice_array_cnt = count($notice_array);
+        for ($i=0; $i<$notice_array_cnt; $i++)
             if ((int)$wr_id != (int)$notice_array[$i])
                 $bo_notice .= $notice_array[$i] . ',';
         $bo_notice = trim($bo_notice);
@@ -465,14 +493,18 @@ if($w == 'u') {
 @mkdir(G5_DATA_PATH.'/file/'.$bo_table, G5_DIR_PERMISSION);
 @chmod(G5_DATA_PATH.'/file/'.$bo_table, G5_DIR_PERMISSION);
 
-$chars_array = array_merge(range(0,9), range('a','z'), range('A','Z'));
-
 // 가변 파일 업로드
 $file_upload_msg = '';
 $upload = array();
 
 if(isset($_FILES['bf_file']['name']) && is_array($_FILES['bf_file']['name'])) {
-    for ($i=0; $i<count($_FILES['bf_file']['name']); $i++) {
+
+    if (function_exists('g5_check_data_htaccess')) {
+        g5_check_data_htaccess();
+    }
+
+    $bf_file_cnt = count($_FILES['bf_file']['name']);
+    for ($i=0; $i<$bf_file_cnt; $i++) {
         $upload[$i]['file']     = '';
         $upload[$i]['source']   = '';
         $upload[$i]['filesize'] = 0;
@@ -485,7 +517,8 @@ if(isset($_FILES['bf_file']['name']) && is_array($_FILES['bf_file']['name'])) {
         $upload[$i]['storage'] = '';
 
         // 삭제에 체크가 되어있다면 파일을 삭제합니다.
-        if (isset($_POST['bf_file_del'][$i]) && $_POST['bf_file_del'][$i]) {
+        if (isset($_POST['bf_file_del'][$i]) && $_POST['bf_file_del'][$i]
+            && !is_uploaded_file($_FILES['bf_file']['tmp_name'][$i])) {
             $upload[$i]['del_check'] = true;
 
             $row = sql_fetch(" select * from {$g5['board_file_table']} where bo_table = '{$bo_table}' and wr_id = '{$wr_id}' and bf_no = '{$i}' ");
@@ -510,11 +543,11 @@ if(isset($_FILES['bf_file']['name']) && is_array($_FILES['bf_file']['name'])) {
         // 서버에 설정된 값보다 큰파일을 업로드 한다면
         if ($filename) {
             if ($_FILES['bf_file']['error'][$i] == 1) {
-                $file_upload_msg .= '\"'.$filename.'\" 파일의 용량이 서버에 설정('.$upload_max_filesize.')된 값보다 크므로 업로드 할 수 없습니다.\\n';
+                $file_upload_msg .= '"'.$filename.'" 파일의 용량이 서버에 설정('.$upload_max_filesize.')된 값보다 크므로 업로드 할 수 없습니다.\\n';
                 continue;
             }
             else if ($_FILES['bf_file']['error'][$i] != 0) {
-                $file_upload_msg .= '\"'.$filename.'\" 파일이 정상적으로 업로드 되지 않았습니다.\\n';
+                $file_upload_msg .= '"'.$filename.'" 파일이 정상적으로 업로드 되지 않았습니다.\\n';
                 continue;
             }
         }
@@ -522,7 +555,7 @@ if(isset($_FILES['bf_file']['name']) && is_array($_FILES['bf_file']['name'])) {
         if (is_uploaded_file($tmp_file)) {
             // 관리자가 아니면서 설정한 업로드 사이즈보다 크다면 건너뜀
             if (!$is_admin && $filesize > $board['bo_upload_size']) {
-                $file_upload_msg .= '\"'.$filename.'\" 파일의 용량('.number_format($filesize).' 바이트)이 게시판에 설정('.number_format($board['bo_upload_size']).' 바이트)된 값보다 크므로 업로드 하지 않습니다.\\n';
+                $file_upload_msg .= '"'.$filename.'" 파일의 용량('.number_format($filesize).' 바이트)이 게시판에 설정('.number_format($board['bo_upload_size']).' 바이트)된 값보다 크므로 업로드 하지 않습니다.\\n';
                 continue;
             }
 
@@ -542,6 +575,17 @@ if(isset($_FILES['bf_file']['name']) && is_array($_FILES['bf_file']['name'])) {
 
             $upload[$i]['image'] = $timg;
 
+            // 새 파일 저장이 성공한 뒤에만 기존 첨부파일을 삭제합니다.
+            $stored_file = g5_store_attachment($tmp_file, $filename, G5_DATA_PATH.'/file/'.$bo_table);
+            if ($stored_file === false) {
+                $file_upload_msg .= '"'.$filename.'" 파일을 안전하게 저장할 수 없습니다. 서버의 난수 소스와 저장 경로를 확인해 주십시오.\n';
+                continue;
+            }
+            $upload[$i]['source'] = $filename;
+            $upload[$i]['filesize'] = $filesize;
+            $upload[$i]['file'] = $stored_file;
+            $dest_file = G5_DATA_PATH.'/file/'.$bo_table.'/'.$stored_file;
+
             // 4.00.11 - 글답변에서 파일 업로드시 원글의 파일이 삭제되는 오류를 수정
             if ($w == 'u') {
                 // 존재하는 파일이 있다면 삭제합니다.
@@ -559,24 +603,6 @@ if(isset($_FILES['bf_file']['name']) && is_array($_FILES['bf_file']['name'])) {
                 }
             }
 
-            // 프로그램 원래 파일명
-            $upload[$i]['source'] = $filename;
-            $upload[$i]['filesize'] = $filesize;
-
-            // 아래의 문자열이 들어간 파일은 -x 를 붙여서 웹경로를 알더라도 실행을 하지 못하도록 함
-            $filename = preg_replace("/\.(php|pht|phtm|htm|cgi|pl|exe|jsp|asp|inc|phar)/i", "$0-x", $filename);
-
-            shuffle($chars_array);
-            $shuffle = implode('', $chars_array);
-
-            // 첨부파일 첨부시 첨부파일명에 공백이 포함되어 있으면 일부 PC에서 보이지 않거나 다운로드 되지 않는 현상이 있습니다. (길상여의 님 090925)
-            $upload[$i]['file'] = md5(sha1($_SERVER['REMOTE_ADDR'])).'_'.substr($shuffle,0,8).'_'.replace_filename($filename);
-
-            $dest_file = G5_DATA_PATH.'/file/'.$bo_table.'/'.$upload[$i]['file'];
-
-            // 업로드가 안된다면 에러메세지 출력하고 죽어버립니다.
-            $error_code = move_uploaded_file($tmp_file, $dest_file) or die($_FILES['bf_file']['error'][$i]);
-
             // 올라간 파일의 퍼미션을 변경합니다.
             chmod($dest_file, G5_FILE_PERMISSION);
 
@@ -587,7 +613,8 @@ if(isset($_FILES['bf_file']['name']) && is_array($_FILES['bf_file']['name'])) {
 }   // end if
 
 // 나중에 테이블에 저장하는 이유는 $wr_id 값을 저장해야 하기 때문입니다.
-for ($i=0; $i<count($upload); $i++)
+$upload_cnt = count($upload);
+for ($i=0; $i<$upload_cnt; $i++)
 {
     $upload[$i]['source'] = sql_real_escape_string($upload[$i]['source']);
     $bf_content[$i] = isset($bf_content[$i]) ? sql_real_escape_string($bf_content[$i]) : '';
@@ -676,8 +703,14 @@ sql_query(" delete from {$g5['autosave_table']} where as_uid = '{$uid}' ");
 //------------------------------------------------------------------------------
 
 // 비밀글이라면 세션에 비밀글의 아이디를 저장한다. 자신의 글은 다시 비밀번호를 묻지 않기 위함
-if ($secret)
+if ($secret) {
+    if (!(isset($wr_num) && $wr_num)) {
+        $write = get_write($write_table, $wr_id, true);
+        $wr_num = $write['wr_num'];
+    }
+
     set_session("ss_secret_{$bo_table}_{$wr_num}", TRUE);
+}
 
 // 메일발송 사용 (수정글은 발송하지 않음)
 if (!($w == 'u' || $w == 'cu') && $config['cf_email_use'] && $board['bo_use_email']) {
@@ -690,9 +723,9 @@ if (!($w == 'u' || $w == 'cu') && $config['cf_email_use'] && $board['bo_use_emai
     $wr_subject = get_text(stripslashes($wr_subject));
 
     $tmp_html = 0;
-    if (strstr($html, 'html1'))
+    if (strpos($html, 'html1') !== false)
         $tmp_html = 1;
-    else if (strstr($html, 'html2'))
+    else if (strpos($html, 'html2') !== false)
         $tmp_html = 2;
 
     $wr_content = conv_content(conv_unescape_nl(stripslashes($wr_content)), $tmp_html);
@@ -737,7 +770,8 @@ if (!($w == 'u' || $w == 'cu') && $config['cf_email_use'] && $board['bo_use_emai
     $unique_email = array_unique($array_email);
     $unique_email = run_replace('write_update_mail_list', array_values($unique_email), $board, $wr_id);
 
-    for ($i=0; $i<count($unique_email); $i++) {
+    $unique_email_cnt = count($unique_email);
+    for ($i=0; $i<$unique_email_cnt; $i++) {
         mailer($wr_name, $wr_email, $unique_email[$i], $subject, $content, 1);
     }
 }

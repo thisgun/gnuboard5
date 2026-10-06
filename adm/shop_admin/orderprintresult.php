@@ -49,7 +49,7 @@ if ($csv == 'csv')
     $to_date = date_conv($to_date);
 
 
-    $sql = " SELECT a.od_id, od_b_zip1, od_b_zip2, od_b_addr1, od_b_addr2, od_b_addr3, od_b_addr_jibeon, od_b_name, od_b_tel, od_b_hp, b.it_name, ct_qty, b.it_id, a.od_id, od_memo, od_invoice, b.ct_option, b.ct_send_cost, b.it_sc_type
+    $sql = " SELECT a.od_id, od_b_zip1, od_b_zip2, od_b_addr1, od_b_addr2, od_b_addr3, od_b_addr_jibeon, od_b_name, od_b_tel, od_b_hp, b.it_name, ct_qty, b.it_id, od_memo, od_invoice, b.ct_option, b.ct_send_cost, b.it_sc_type
                FROM {$g5['g5_shop_order_table']} a, {$g5['g5_shop_cart_table']} b
               where a.od_id = b.od_id ";
     if ($case == 1) // 출력기간
@@ -65,7 +65,7 @@ if ($csv == 'csv')
         alert("출력할 내역이 없습니다.");
 
     //header('Content-Type: text/x-csv');
-    header("Content-charset=utf-8");
+    header("Content-Type: text/csv; charset=utf-8");
     header('Content-Type: doesn/matter');
     header('Expires: ' . gmdate('D, d M Y H:i:s') . ' GMT');
     header('Content-Disposition: attachment; filename="orderlist-' . date("ymd", time()) . '.csv"');
@@ -118,21 +118,21 @@ if ($csv == 'csv')
         }
 
         echo '"\''.$row['od_b_zip1'].$row['od_b_zip2'].'"\''.',';
-        echo '"'.$pull_address.'"'.',';
-        echo '"'.$row['od_b_name'].'"'.',';
+        echo '"'.(function_exists('csv_safe_cell') ? csv_safe_cell($pull_address) : $pull_address).'"'.',';
+        echo '"'.(function_exists('csv_safe_cell') ? csv_safe_cell($row['od_b_name']) : $row['od_b_name']).'"'.',';
         //echo '"'.multibyte_digit((string)$row[od_b_tel]).'"'.',';
         //echo '"'.multibyte_digit((string)$row[od_b_hp]).'"'.',';
         echo '"'.conv_telno($row['od_b_tel']) . '"'.',';
         echo '"'.conv_telno($row['od_b_hp']) . '"'.',';
-        echo '"'.preg_replace("/\"/", "&#034;", $row['it_name']) . '"'.',';
+        echo '"'.(function_exists('csv_safe_cell') ? csv_safe_cell(preg_replace("/\"/", "&#034;", $row['it_name'])) : preg_replace("/\"/", "&#034;", $row['it_name'])) . '"'.',';
         echo '"'.$row['ct_qty'].'"'.',';
-        echo '"'.$row['ct_option'].'"'.',';
+        echo '"'.(function_exists('csv_safe_cell') ? csv_safe_cell($row['ct_option']) : $row['ct_option']).'"'.',';
         echo '"'.$ct_send_cost.'"'.',';
         echo '"\''.$row['it_id'].'\'"'.',';
         echo '"\''.$row['od_id'].'\'"'.',';
-        echo '"'.$row['od_invoice'].'"'.',';
+        echo '"'.(function_exists('csv_safe_cell') ? csv_safe_cell($row['od_invoice']) : $row['od_invoice']).'"'.',';
         //echo '"'.preg_replace("/\"/", "&#034;", preg_replace("/\n/", "", $row[od_memo])).'"';
-        echo '"'.preg_replace("/\"/", "&#034;", $row['od_memo']).'"';
+        echo '"'.(function_exists('csv_safe_cell') ? csv_safe_cell(preg_replace("/\"/", "&#034;", $row['od_memo'])) : preg_replace("/\"/", "&#034;", $row['od_memo'])).'"';
         echo "\n";
     }
     if ($i == 0)
@@ -153,7 +153,7 @@ if ($csv == 'xls')
     $fr_date = date_conv($fr_date);
     $to_date = date_conv($to_date);
 
-    $sql = " SELECT a.od_id, od_b_zip1, od_b_zip2, od_b_addr1, od_b_addr2, od_b_addr3, od_b_addr_jibeon, od_b_name, od_b_tel, od_b_hp, b.it_name, ct_qty, b.it_id, a.od_id, od_memo, od_invoice, b.ct_option, b.ct_send_cost, b.it_sc_type
+    $sql = " SELECT a.od_id, od_b_zip1, od_b_zip2, od_b_addr1, od_b_addr2, od_b_addr3, od_b_addr_jibeon, od_b_name, od_b_tel, od_b_hp, b.it_name, ct_qty, b.it_id, od_memo, od_invoice, b.ct_option, b.ct_send_cost, b.it_sc_type
                FROM {$g5['g5_shop_order_table']} a, {$g5['g5_shop_cart_table']} b
               where a.od_id = b.od_id ";
     if ($case == 1) // 출력기간
@@ -217,18 +217,18 @@ if ($csv == 'xls')
             }
 
             $rows[] = array(' '.$row['od_b_zip1'].$row['od_b_zip2'],
-                            $pull_address,
-                            $row['od_b_name'], 
-                            ' '.conv_telno($row['od_b_tel']), 
-                            ' '.conv_telno($row['od_b_hp']), 
-                            preg_replace("/\"/", "&#034;", $row['it_name']), 
-                            ' '.$row['ct_qty'], 
-                            $row['ct_option'], 
+                            function_exists('csv_safe_cell') ? csv_safe_cell($pull_address) : $pull_address,
+                            function_exists('csv_safe_cell') ? csv_safe_cell($row['od_b_name']) : $row['od_b_name'],
+                            ' '.conv_telno($row['od_b_tel']),
+                            ' '.conv_telno($row['od_b_hp']),
+                            function_exists('csv_safe_cell') ? csv_safe_cell(preg_replace("/\"/", "&#034;", $row['it_name'])) : preg_replace("/\"/", "&#034;", $row['it_name']),
+                            ' '.$row['ct_qty'],
+                            function_exists('csv_safe_cell') ? csv_safe_cell($row['ct_option']) : $row['ct_option'],
                             $ct_send_cost,
                             ' '.$row['it_id'],
                             ' '.$row['od_id'],
                             ' '.$row['od_invoice'],
-                            preg_replace("/\"/", "&#034;", $row['od_memo']));
+                            function_exists('csv_safe_cell') ? csv_safe_cell(preg_replace("/\"/", "&#034;", $row['od_memo'])) : preg_replace("/\"/", "&#034;", $row['od_memo']));
         }
 
         $data = array_merge(array($headers), $rows);

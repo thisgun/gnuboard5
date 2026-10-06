@@ -6,6 +6,11 @@ auth_check_menu($auth, $sub_menu, "r");
 
 $sql_common = " from {$g5['g5_shop_order_data_table']} ";
 
+$allowed_sfl = array('od_id');
+if (!in_array($sfl, $allowed_sfl)) {
+    $sfl = 'od_id';
+}
+
 $sql_search = " where cart_id <> '0' ";
 if ($stx) {
     $sql_search .= " and ( ";
@@ -24,6 +29,9 @@ if (!$sst) {
     $sst  = "od_id";
     $sod = "desc";
 }
+$allowed_sst = array('od_id');
+if ($sst && !in_array($sst, $allowed_sst)) $sst = 'od_id';
+if ($sod && !in_array(strtolower($sod), array('asc', 'desc'))) $sod = '';
 $sql_order = " order by {$sst} {$sod} ";
 
 $sql = " select count(*) as cnt
@@ -104,6 +112,12 @@ $colspan = 10;
             case 'lg':
                 $pg = 'LGU+';
                 break;
+            case 'toss':
+                $pg = '토스페이먼츠';
+                break;
+            case 'nicepay':
+                $pg = 'NICEPAY';
+                break;
             default:
                 $pg = 'KCP';
                 break;
@@ -127,7 +141,7 @@ $colspan = 10;
         <td class="td_center"><?php echo get_text($data['od_tel']); ?></td>
         <td class="td_name"><?php echo get_text($data['od_b_name']); ?></td>
         <td class="td_price"><?php echo number_format($ct['price']); ?></td>
-        <td class="td_center"><?php echo $data['od_settle_case']; ?></td>
+        <td class="td_center"><?php echo get_text($data['od_settle_case']); ?></td>
         <td class="td_time"><?php echo $row['dt_time']; ?></td>
         <td class="td_mng td_mng_m">
             <a href="./inorderform.php?od_id=<?php echo $row['od_id']; ?>&amp;<?php echo $qstr; ?>" class="btn btn_03"><span class="sound_only"><?php echo $row['od_id']; ?> </span>보기</a>

@@ -37,6 +37,8 @@ if (G5_HTTPS_DOMAIN) {
 
 // 쇼핑몰 설정값 배열변수
 $default = sql_fetch(" select * from {$g5['g5_shop_default_table']} ");
+include_once(G5_LIB_PATH.'/shop.easypay.lib.php');
+$default = shop_easypay_normalize($default);
 
 if(!defined('_THEME_PREVIEW_')) {
     // 테마 경로 설정
@@ -79,20 +81,17 @@ if( !isset($g5['g5_shop_post_log_table']) || !$g5['g5_shop_post_log_table'] ){
     $g5['g5_shop_post_log_table'] = G5_SHOP_TABLE_PREFIX.'order_post_log'; // 주문요청 로그 테이블
 }
 
+if (empty($g5['g5_shop_order_access_table'])) {
+    $g5['g5_shop_order_access_table'] = G5_SHOP_TABLE_PREFIX.'order_access';
+}
+
 // 옵션 ID 특수문자 필터링 패턴
 define('G5_OPTION_ID_FILTER', '/[\'\"\\\'\\\"]/');
 
-if(isset($_SERVER['HTTPS']) && $_SERVER['HTTPS']=='on') {
-    // 토스페이먼츠 현금영수증 실결제 URL 상수
-    define('SHOP_TOSSPAYMENTS_CASHRECEIPT_REAL_JS', 'https://pgweb.tosspayments.com/WEB_SERVER/js/receipt_link.js');
-    // 토스페이먼츠 현금영수증 테스트 URL 상수
-    define('SHOP_TOSSPAYMENTS_CASHRECEIPT_TEST_JS', 'https://pgweb.tosspayments.com:7085/WEB_SERVER/js/receipt_link.js');
-} else {
-    // 토스페이먼츠 현금영수증 실결제 URL 상수
-    define('SHOP_TOSSPAYMENTS_CASHRECEIPT_REAL_JS', 'http://pgweb.tosspayments.com/WEB_SERVER/js/receipt_link.js');
-    // 토스페이먼츠 현금영수증 테스트 URL 상수
-    define('SHOP_TOSSPAYMENTS_CASHRECEIPT_TEST_JS', 'http://pgweb.tosspayments.com:7085/WEB_SERVER/js/receipt_link.js');
-}
+// 토스페이먼츠 현금영수증 실결제 URL 상수
+define('SHOP_TOSSPAYMENTS_CASHRECEIPT_REAL_JS', 'https://pgweb.tosspayments.com/WEB_SERVER/js/receipt_link.js');
+// 토스페이먼츠 현금영수증 테스트 URL 상수
+define('SHOP_TOSSPAYMENTS_CASHRECEIPT_TEST_JS', 'https://pgweb.tosspayments.com:7085/WEB_SERVER/js/receipt_link.js');
 
 // 네이버페이를 신용카드 결제창에서 지원하고 있으므로 네이버에 직접신청하는 결제 기능을 미사용(false:기본설정) 합니다. (kagla,211019)
 // 네이버에서 직접신청 결제를 사용(true)하시는 경우 모든 문제를 직접 해결해 주셔야 합니다.
@@ -132,6 +131,22 @@ define('G5_OD_STATUS_FINISH'    , '배송완료');
 '반품'  : 배송완료 후에만 반품처리가 가능합니다.
 '품절'  : 주문이나 입금후 상품의 품절된 상태를 나타냅니다.
 */
+
+// KG이니시스 PRO 경량 운영 감시
+// 서버 작업 스케줄러 없이 사이트 접속(GET) 흐름에서 주기적으로 실행한다.
+// $default 는 이미 로드되어 있어 평상시에는 추가 조회 없이 시각만 비교한다.
+// 실제 감시는 응답 종료 후 잠금 대기 없이 처리하므로 방문자 페이지에 영향을 주지 않는다.
+if (!empty($default['de_inicis_pro_use'])
+    && isset($default['de_pg_service']) && $default['de_pg_service'] === 'inicis'
+    && PHP_SAPI !== 'cli'
+    && isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'GET'
+    && array_key_exists('de_inicis_pro_monitor_at', $default)
+    && (empty($default['de_inicis_pro_monitor_at'])
+        || $default['de_inicis_pro_monitor_at'] < date('Y-m-d H:i:s', G5_SERVER_TIME - 600))) {
+    include_once(G5_ADMIN_PATH.'/shop_admin/admin.shop.lib.php');
+    if (function_exists('check_order_inicis_pro_payments_inline'))
+        register_shutdown_function('check_order_inicis_pro_payments_inline');
+}
 
 //==============================================================================
 // 쇼핑몰 필수 실행코드 모음 끝

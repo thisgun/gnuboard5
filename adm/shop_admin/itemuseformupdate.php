@@ -18,8 +18,10 @@ foreach($check_keys as $key){
 
     if( in_array($key, array('is_content', 'is_reply_content')) ){
         $posts[$key] = isset($_POST[$key]) ? $_POST[$key] : '';
+    } else if( $key === 'is_id' ) {
+        $posts[$key] = isset($_POST[$key]) ? (int) $_POST[$key] : 0;
     } else {
-        $posts[$key] = isset($_POST[$key]) ? clean_xss_tags($_POST[$key], 1, 1) : '';
+        $posts[$key] = isset($_POST[$key]) ? addslashes(clean_xss_tags(stripslashes($_POST[$key]), 1, 1)) : '';
     }
 }
 
@@ -34,6 +36,7 @@ if ($w == "u")
                    is_reply_name = '".$member['mb_nick']."'
              where is_id = '".$posts['is_id']."'";
     sql_query($sql);
+    run_event('shop_admin_item_use_updated', $posts['is_id']);
 
     if( isset($_POST['it_id']) ) {
         update_use_cnt($_POST['it_id']);

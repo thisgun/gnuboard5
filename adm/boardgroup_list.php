@@ -4,20 +4,17 @@ require_once './_common.php';
 
 auth_check_menu($auth, $sub_menu, 'r');
 
-if (!isset($group['gr_device'])) {
-    // 게시판 그룹 사용 필드 추가
-    // both : pc, mobile 둘다 사용
-    // pc : pc 전용 사용
-    // mobile : mobile 전용 사용
-    // none : 사용 안함
-    sql_query(" ALTER TABLE  `{$g5['group_table']}` ADD  `gr_device` ENUM(  'both',  'pc',  'mobile' ) NOT NULL DEFAULT  'both' AFTER  `gr_subject` ", false);
-}
 
 $sql_common = " from {$g5['group_table']} ";
 
 $sql_search = " where (1) ";
 if ($is_admin != 'super') {
     $sql_search .= " and (gr_admin = '{$member['mb_id']}') ";
+}
+
+$allowed_sfl = array('gr_subject', 'gr_id', 'gr_admin');
+if (!in_array($sfl, $allowed_sfl)) {
+    $sfl = 'gr_subject';
 }
 
 if ($stx) {
@@ -34,6 +31,9 @@ if ($stx) {
     $sql_search .= " ) ";
 }
 
+$allowed_sst = array('gr_id', 'gr_subject', 'gr_admin', 'gr_order');
+if ($sst && !in_array($sst, $allowed_sst)) $sst = '';
+if ($sod && !in_array(strtolower($sod), array('asc', 'desc'))) $sod = '';
 if ($sst) {
     $sql_order = " order by {$sst} {$sod} ";
 } else {

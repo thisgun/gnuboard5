@@ -20,7 +20,7 @@ check_admin_token();
 $fm_id = isset($_REQUEST['fm_id']) ? (int) $_REQUEST['fm_id'] : 0;
 $fm_himg_del = isset($_POST['fm_himg_del']) ? (int) $_POST['fm_himg_del'] : 0;
 $fm_timg_del = isset($_POST['fm_timg_del']) ? (int) $_POST['fm_timg_del'] : 0;
-$fm_subject = isset($_POST['fm_subject']) ? strip_tags(clean_xss_attributes($_POST['fm_subject'])) : '';
+$fm_subject = isset($_POST['fm_subject']) ? addslashes(strip_tags(clean_xss_attributes(stripslashes($_POST['fm_subject'])))) : '';
 $fm_head_html = isset($_POST['fm_head_html']) ? $_POST['fm_head_html'] : '';
 $fm_tail_html = isset($_POST['fm_tail_html']) ? $_POST['fm_tail_html'] : '';
 $fm_mobile_head_html = isset($_POST['fm_mobile_head_html']) ? $_POST['fm_mobile_head_html'] : '';
@@ -42,16 +42,17 @@ $sql_common = " set fm_subject = '$fm_subject',
                     fm_order = '$fm_order' ";
 
 if ($w == "") {
-    $sql = " alter table {$g5['faq_master_table']} auto_increment=1 ";
-    sql_query($sql);
-
     $sql = " insert {$g5['faq_master_table']} $sql_common ";
     sql_query($sql);
 
     $fm_id = sql_insert_id();
+    run_event('admin_faq_master_created', $fm_id);
+
 } elseif ($w == "u") {
     $sql = " update {$g5['faq_master_table']} $sql_common where fm_id = '$fm_id' ";
     sql_query($sql);
+    run_event('admin_faq_master_updated', $fm_id);
+
 } elseif ($w == "d") {
     @unlink(G5_DATA_PATH . "/faq/{$fm_id}_h");
     @unlink(G5_DATA_PATH . "/faq/{$fm_id}_t");
@@ -63,6 +64,8 @@ if ($w == "") {
     // FAQ상세삭제
     $sql = " delete from {$g5['faq_table']} where fm_id = '$fm_id' ";
     sql_query($sql);
+
+    run_event('admin_faq_master_deleted', $fm_id);
 }
 
 if ($w == "" || $w == "u") {

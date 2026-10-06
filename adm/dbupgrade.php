@@ -1,222 +1,213 @@
 <?php
 $sub_menu = '100410';
 include_once('./_common.php');
+include_once(G5_LIB_PATH . '/migration.lib.php');
+include_once(G5_LIB_PATH . '/shop_install.lib.php');
 
 auth_check_menu($auth, $sub_menu, 'r');
 
+if ($is_admin != 'super') {
+    alert('최고관리자만 접근 가능합니다.');
+}
+
+$is_execute = isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'POST';
+$migration_result = array('success' => true, 'applied' => 0, 'skipped' => 0, 'errors' => array());
+$shop_install_result = null;
+$action = '';
+
+if ($is_execute) {
+    check_demo();
+    check_admin_token();
+    $action = isset($_POST['action']) ? trim($_POST['action']) : 'migrate';
+    if ($action === 'install_shop') {
+        $shop_install_result = g5_shop_install_run();
+    } elseif ($action === 'record_existing') {
+        $migration_result = g5_migration_run('', true);
+    } else {
+        $migration_id = isset($_POST['migration_id']) ? trim($_POST['migration_id']) : '';
+        $migration_result = g5_migration_run($migration_id);
+        $migration_result = run_replace('admin_dbupgrade_result', $migration_result);
+    }
+}
+
+$migration_statuses = g5_migration_status();
+$pending_count = 0;
+$unrecorded_count = 0;
+foreach ($migration_statuses as $migration_status) {
+    if (isset($migration_status['status']) && $migration_status['status'] === 'unrecorded') {
+        $unrecorded_count++;
+    } elseif (isset($migration_status['error']) || $migration_status['status'] !== 'success' || $migration_status['checksum_changed']) {
+        $pending_count++;
+    }
+}
+
+if ($shop_install_result !== null && $shop_install_result['success']) {
+    alert('쇼핑몰 설치가 완료되었습니다.', G5_ADMIN_URL . '/dbupgrade.php');
+} elseif ($shop_install_result !== null) {
+    $db_upgrade_msg = '쇼핑몰 설치에 실패했습니다. 오류 내용을 확인해 주십시오.';
+} elseif (!$is_execute) {
+    $db_upgrade_msg = $pending_count ? '확인·실행이 필요한 DB 마이그레이션이 있습니다. 아래 내용을 확인해 주십시오.' : ($unrecorded_count ? '현재 실행할 변경은 없지만 기존 상태 확인 이력이 등록되지 않았습니다.' : 'DB 마이그레이션이 모두 적용되어 있습니다.');
+} elseif (!$migration_result['success']) {
+    $db_upgrade_msg = 'DB 마이그레이션에 실패했습니다. 오류 내용을 확인해 주십시오.';
+} elseif ($action === 'record_existing') {
+    $db_upgrade_msg = '기존 상태 확인 이력 ' . (int) $migration_result['skipped'] . '건을 등록했습니다. 선행 항목에 실행이 필요하거나 실패 이력이 있으면 등록을 중단합니다.';
+} elseif ($migration_result['applied'] || $migration_result['skipped']) {
+    $db_upgrade_msg = 'DB 마이그레이션이 완료되었습니다.';
+} else {
+    $db_upgrade_msg = '적용할 DB 마이그레이션이 없습니다.';
+}
+
 $g5['title'] = 'DB 업그레이드';
 include_once('./admin.head.php');
-
-$is_check = false;
-
-//소셜 로그인 관련 필드 및 구글 리챕챠 필드 추가
-if(!isset($config['cf_social_login_use'])) {
-    sql_query("ALTER TABLE `{$g5['config_table']}`
-                ADD `cf_social_login_use` tinyint(4) NOT NULL DEFAULT '0' AFTER `cf_googl_shorturl_apikey`,
-                ADD `cf_google_clientid` varchar(100) NOT NULL DEFAULT '' AFTER `cf_twitter_secret`,
-                ADD `cf_google_secret` varchar(100) NOT NULL DEFAULT '' AFTER `cf_google_clientid`,
-                ADD `cf_naver_clientid` varchar(100) NOT NULL DEFAULT '' AFTER `cf_google_secret`,
-                ADD `cf_naver_secret` varchar(100) NOT NULL DEFAULT '' AFTER `cf_naver_clientid`,
-                ADD `cf_kakao_rest_key` varchar(100) NOT NULL DEFAULT '' AFTER `cf_naver_secret`,
-                ADD `cf_social_servicelist` varchar(255) NOT NULL DEFAULT '' AFTER `cf_social_login_use`,
-                ADD `cf_payco_clientid` varchar(100) NOT NULL DEFAULT '' AFTER `cf_social_servicelist`,
-                ADD `cf_payco_secret` varchar(100) NOT NULL DEFAULT '' AFTER `cf_payco_clientid`,
-                ADD `cf_captcha` varchar(100) NOT NULL DEFAULT '' AFTER `cf_kakao_js_apikey`,
-                ADD `cf_recaptcha_site_key` varchar(100) NOT NULL DEFAULT '' AFTER `cf_captcha`,
-                ADD `cf_recaptcha_secret_key` varchar(100) NOT NULL DEFAULT '' AFTER `cf_recaptcha_site_key`
-    ", true);
-
-    $is_check = true;
-}
-
-//소셜 로그인 관련 필드 카카오 클라이언트 시크릿 추가
-if(!isset($config['cf_kakao_client_secret'])) {
-    sql_query("ALTER TABLE `{$g5['config_table']}`
-                ADD `cf_kakao_client_secret` varchar(100) NOT NULL DEFAULT '' AFTER `cf_kakao_rest_key`
-    ", true);
-
-    $is_check = true;
-}
-
-// 회원 이미지 관련 필드 추가
-if(!isset($config['cf_member_img_size'])) {
-    sql_query("ALTER TABLE `{$g5['config_table']}`
-                ADD `cf_member_img_size` int(11) NOT NULL DEFAULT '0' AFTER `cf_member_icon_height`,
-                ADD `cf_member_img_width` int(11) NOT NULL DEFAULT '0' AFTER `cf_member_img_size`,
-                ADD `cf_member_img_height` int(11) NOT NULL DEFAULT '0' AFTER `cf_member_img_width`
-    ", true);
-
-    $sql = " update {$g5['config_table']} set cf_member_img_size = 50000, cf_member_img_width = 60, cf_member_img_height = 60 ";
-    sql_query($sql, false);
-
-    $is_check = true;
-}
-
-// 소셜 로그인 관리 테이블 없을 경우 생성
-if( isset($g5['social_profile_table']) && !sql_query(" DESC {$g5['social_profile_table']} ", false)) {
-    sql_query(" CREATE TABLE IF NOT EXISTS `{$g5['social_profile_table']}` (
-                  `mp_no` int(11) NOT NULL AUTO_INCREMENT,
-                  `mb_id` varchar(255) NOT NULL DEFAULT '',
-                  `provider` varchar(50) NOT NULL DEFAULT '',
-                  `object_sha` varchar(45) NOT NULL DEFAULT '',
-                  `identifier` varchar(255) NOT NULL DEFAULT '',
-                  `profileurl` varchar(255) NOT NULL DEFAULT '',
-                  `photourl` varchar(255) NOT NULL DEFAULT '',
-                  `displayname` varchar(150) NOT NULL DEFAULT '',
-                  `description` varchar(255) NOT NULL DEFAULT '',
-                  `mp_register_day` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
-                  `mp_latest_day` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
-                  UNIQUE KEY `mp_no` (`mp_no`),
-                  KEY `mb_id` (`mb_id`),
-                  KEY `provider` (`provider`)
-                ) ", true);
-
-    $is_check = true;
-}
-
-// 게시판 짧은 주소
-$sql = " select bo_table from {$g5['board_table']} ";
-$result = sql_query($sql);
-
-while ($row = sql_fetch_array($result)) {
-    $write_table = $g5['write_prefix'] . $row['bo_table']; // 게시판 테이블 전체이름
-
-    $sql = " SHOW COLUMNS FROM {$write_table} LIKE 'wr_seo_title' ";
-    $row = sql_fetch($sql);
-    
-    if( !$row ){
-        sql_query("ALTER TABLE `{$write_table}`
-                    ADD `wr_seo_title` varchar(200) NOT NULL DEFAULT '' AFTER `wr_content`,
-                    ADD INDEX `wr_seo_title` (`wr_seo_title`);
-        ", false);
-
-        $is_check = true;
-    }
-}
-
-// 내용 관리 짧은 주소
-$sql = " SHOW COLUMNS FROM `{$g5['content_table']}` LIKE 'co_seo_title' ";
-$row = sql_fetch($sql);
-
-if( !$row ){
-    sql_query("ALTER TABLE `{$g5['content_table']}`
-                ADD `co_seo_title` varchar(200) NOT NULL DEFAULT '' AFTER `co_content`,
-                ADD INDEX `co_seo_title` (`co_seo_title`);
-    ", false);
-
-    $is_check = true;
-}
-
-$sql = "select * from {$g5['content_table']} limit 100 ";
-$result = sql_query($sql);
-
-while ($row = sql_fetch_array($result)) {
-
-    if( ! $row['co_seo_title']){
-        
-        $co_seo_title = exist_seo_title_recursive('content', generate_seo_title($row['co_subject']), $g5['content_table'], $row['co_id']);
-        
-        $sql = " update {$g5['content_table']}
-                    set co_seo_title = '$co_seo_title'
-                  where co_id = '{$row['co_id']}' ";
-        sql_query($sql);
-
-    }
-}
-
-// 메모 테이블
-$sql = " SHOW COLUMNS FROM `{$g5['memo_table']}` LIKE 'me_send_id' ";
-$row = sql_fetch($sql);
-
-if( !$row ){
-    sql_query("ALTER TABLE `{$g5['memo_table']}`
-                ADD `me_send_id` INT(11) NOT NULL DEFAULT '0',
-                ADD `me_type` ENUM('send','recv') NOT NULL DEFAULT 'recv',
-                ADD `me_send_ip` VARCHAR(100) NOT NULL DEFAULT '',
-                CHANGE COLUMN `me_id` `me_id` INT(11) NOT NULL AUTO_INCREMENT;
-    ", false);
-
-    $is_check = true;
-}
-
-// 읽지 않은 메모 수 칼럼
-if(!isset($member['mb_memo_cnt'])) {
-    sql_query(" ALTER TABLE `{$g5['member_table']}`
-                ADD `mb_memo_cnt` int(11) NOT NULL DEFAULT '0' AFTER `mb_memo_call`", true);
-
-    $is_check = true;
-}
-
-// 스크랩 읽은 수 추가
-if(!isset($member['mb_scrap_cnt'])) {
-    sql_query(" ALTER TABLE `{$g5['member_table']}`
-                ADD `mb_scrap_cnt` int(11) NOT NULL DEFAULT '0' AFTER `mb_memo_cnt`", true);
-
-	$is_check = true;
-}
-
-// 짧은 URL 주소를 사용 여부 필드 추가
-if (!isset($config['cf_bbs_rewrite'])) {
-    sql_query(" ALTER TABLE `{$g5['config_table']}`
-                    ADD `cf_bbs_rewrite` tinyint(4) NOT NULL DEFAULT '0' AFTER `cf_link_target` ", true);
-
-	$is_check = true;
-}
-
-// 파일테이블에 추가 칼럼
-
-$sql = " SHOW COLUMNS FROM `{$g5['board_file_table']}` LIKE 'bf_fileurl' ";
-$row = sql_fetch($sql);
-
-if( !$row ) {
-    sql_query(" ALTER TABLE `{$g5['board_file_table']}` 
-                ADD COLUMN `bf_fileurl` VARCHAR(255) NOT NULL DEFAULT '' AFTER `bf_content`,
-                ADD COLUMN `bf_thumburl` VARCHAR(255) NOT NULL DEFAULT '' AFTER `bf_fileurl`,
-                ADD COLUMN `bf_storage` VARCHAR(50) NOT NULL DEFAULT '' AFTER `bf_thumburl`", true);
-
-    $is_check = true;
-}
-
-if (defined('G5_USE_SHOP') && G5_USE_SHOP) {
-    // 임시저장 테이블이 없을 경우 생성
-    if(!sql_query(" DESC {$g5['g5_shop_post_log_table']} ", false)) {
-        sql_query(" CREATE TABLE IF NOT EXISTS `{$g5['g5_shop_post_log_table']}` (
-                    `log_id` int(11) NOT NULL AUTO_INCREMENT,
-                    `oid` bigint(20) unsigned NOT NULL,
-                    `mb_id` varchar(255) NOT NULL DEFAULT '',
-                    `post_data` text NOT NULL,
-                    `ol_code` varchar(255) NOT NULL DEFAULT '',
-                    `ol_msg` text NOT NULL,
-                    `ol_datetime` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
-                    `ol_ip` varchar(25) NOT NULL DEFAULT '',
-                    PRIMARY KEY (`log_id`)
-                    ) ENGINE=MyISAM DEFAULT CHARSET=utf8; ", true);
-
-        $is_check = true;
-    }
-
-    $result = sql_query("describe `{$g5['g5_shop_post_log_table']}`");
-    while ($row = sql_fetch_array($result)){
-        if( isset($row['Field']) && $row['Field'] === 'ol_msg' && $row['Type'] === 'varchar(255)' ){
-            sql_query("ALTER TABLE `{$g5['g5_shop_post_log_table']}` MODIFY ol_msg TEXT NOT NULL;", false);
-            sql_query("ALTER TABLE `{$g5['g5_shop_post_log_table']}` DROP PRIMARY KEY;", false);
-            sql_query("ALTER TABLE `{$g5['g5_shop_post_log_table']}` ADD `log_id` int(11) NOT NULL AUTO_INCREMENT, ADD PRIMARY KEY (`log_id`);", false);
-            $is_check = true;
-            break;
-        }
-    }
-}
-
-$is_check = run_replace('admin_dbupgrade', $is_check);
-
-$db_upgrade_msg = $is_check ? 'DB 업그레이드가 완료되었습니다.' : '더 이상 업그레이드 할 내용이 없습니다.<br>현재 DB 업그레이드가 완료된 상태입니다.';
+$dbupgrade_token = get_admin_token();
 ?>
 
 <div class="local_desc01 local_desc">
-    <p>
-        <?php echo $db_upgrade_msg; ?>
-    </p>
+    <p><?php echo $db_upgrade_msg; ?></p>
+    <?php if ($unrecorded_count) { ?>
+    <p>실행 불필요 <?php echo (int) $unrecorded_count; ?>건: 현재 실행 조건상 건너뛰는 항목입니다. 과거 실행 성공을 의미하지 않으며, 선행 작업 후에는 결과가 달라질 수 있습니다. 기존 상태 등록은 처음부터 연속해서 실행 불필요한 항목만 기록합니다.</p>
+    <?php } ?>
+    <p>대기 항목에는 데이터 보정 등 조회만으로 완료를 판단할 수 없는 작업도 포함됩니다. 조회 시 DB 변경이나 이력 등록은 수행하지 않습니다.</p>
 </div>
 
+<?php if ($shop_install_result !== null && !$shop_install_result['success']) { ?>
+<div class="local_desc01 local_desc" style="color:#d00">
+    <p><?php echo htmlspecialchars($shop_install_result['error'], ENT_QUOTES, 'UTF-8'); ?></p>
+</div>
+<?php } elseif ($migration_result['errors']) { ?>
+<div class="local_desc01 local_desc" style="color:#d00">
+    <?php foreach ($migration_result['errors'] as $migration_error) { ?>
+    <p><?php echo htmlspecialchars($migration_error, ENT_QUOTES, 'UTF-8'); ?></p>
+    <?php } ?>
+</div>
+<?php } ?>
+
+<div class="dbupgrade_all_actions">
+    <?php if ($unrecorded_count) { ?>
+    <form class="dbupgrade_existing_action" method="post" action="<?php echo G5_ADMIN_URL; ?>/dbupgrade.php">
+        <input type="hidden" name="token" value="<?php echo $dbupgrade_token; ?>">
+        <input type="hidden" name="action" value="record_existing">
+        <button type="submit" class="btn_submit">기존 상태 확인 이력 등록</button>
+    </form>
+    <?php } ?>
+    <?php if (!defined('G5_USE_SHOP') || !G5_USE_SHOP) { ?>
+    <form method="post" action="<?php echo G5_ADMIN_URL; ?>/dbupgrade.php" onsubmit="return confirm('쇼핑몰을 설치하시겠습니까? 설치 전 데이터베이스와 data/dbconfig.php 백업을 권장합니다.');">
+        <input type="hidden" name="token" value="<?php echo $dbupgrade_token; ?>">
+        <input type="hidden" name="action" value="install_shop">
+        <button type="submit" class="btn_submit">쇼핑몰 설치</button>
+    </form>
+    <?php } ?>
+    <form method="post" action="<?php echo G5_ADMIN_URL; ?>/dbupgrade.php" onsubmit="return confirm('선택한 DB 마이그레이션을 실행하시겠습니까? 실행 전 데이터베이스 백업을 권장합니다.');">
+        <input type="hidden" name="token" value="<?php echo $dbupgrade_token; ?>">
+        <input type="hidden" name="action" value="migrate">
+        <button type="submit" name="migration_id" value="" class="btn_submit">전체 마이그레이션 실행</button>
+    </form>
+</div>
+<form method="post" action="<?php echo G5_ADMIN_URL; ?>/dbupgrade.php" onsubmit="return confirm('선택한 DB 마이그레이션을 실행하시겠습니까? 실행 전 데이터베이스 백업을 권장합니다.');">
+    <input type="hidden" name="token" value="<?php echo $dbupgrade_token; ?>">
+    <input type="hidden" name="action" value="migrate">
+<div class="tbl_head01 tbl_wrap">
+    <table id="dbupgrade_migration_table">
+        <caption>버전형 DB 마이그레이션 목록</caption>
+        <thead>
+            <tr>
+                <th scope="col" aria-sort="none"><button type="button" class="dbupgrade_sort" data-column="0">마이그레이션 <span aria-hidden="true"></span></button></th>
+                <th scope="col" class="dbupgrade_description" aria-sort="none"><button type="button" class="dbupgrade_sort" data-column="1">설명 <span aria-hidden="true"></span></button></th>
+                <th scope="col" aria-sort="none"><button type="button" class="dbupgrade_sort" data-column="2">상태 <span aria-hidden="true"></span></button></th>
+                <th scope="col" aria-sort="none"><button type="button" class="dbupgrade_sort" data-column="3">적용 시각 <span aria-hidden="true"></span></button></th>
+                <th scope="col" aria-sort="none"><button type="button" class="dbupgrade_sort" data-column="4">실행 <span aria-hidden="true"></span></button></th>
+            </tr>
+        </thead>
+        <tbody>
+        <?php $previous_migrations_ready = true; ?>
+        <?php foreach ($migration_statuses as $migration_status) { ?>
+            <?php
+            $current_migration_status = isset($migration_status['status']) ? $migration_status['status'] : 'error';
+            $migration_succeeded = $current_migration_status === 'success' && !$migration_status['checksum_changed'];
+            $migration_can_run = in_array($current_migration_status, array('pending', 'failed'), true) && $previous_migrations_ready;
+            $migration_button_title = $current_migration_status === 'unrecorded' ? '기존 상태 확인 이력을 등록해 주십시오.' : ($current_migration_status === 'success' ? '이미 성공한 마이그레이션입니다.' : ($previous_migrations_ready ? '' : '선행 마이그레이션을 먼저 실행해야 합니다.'));
+            ?>
+            <tr>
+            <?php if (isset($migration_status['error'])) { ?>
+                <td colspan="5"><?php echo htmlspecialchars($migration_status['error'], ENT_QUOTES, 'UTF-8'); ?></td>
+            <?php } else { ?>
+                <td><?php echo htmlspecialchars($migration_status['id'], ENT_QUOTES, 'UTF-8'); ?></td>
+                <td class="dbupgrade_description"><?php echo htmlspecialchars($migration_status['description'], ENT_QUOTES, 'UTF-8'); ?></td>
+                <td><?php echo g5_migration_status_label($migration_status['status'], $migration_status['checksum_changed']); ?></td>
+                <td><?php echo htmlspecialchars($migration_status['applied_at'], ENT_QUOTES, 'UTF-8'); ?></td>
+                <td>
+                    <button type="submit" name="migration_id" value="<?php echo htmlspecialchars($migration_status['id'], ENT_QUOTES, 'UTF-8'); ?>" class="btn_frmline"<?php echo $migration_can_run ? '' : ' disabled'; ?><?php echo $migration_button_title !== '' ? ' title="' . htmlspecialchars($migration_button_title, ENT_QUOTES, 'UTF-8') . '"' : ''; ?>>실행</button>
+                </td>
+            <?php } ?>
+            </tr>
+            <?php $previous_migrations_ready = $previous_migrations_ready && $migration_succeeded; ?>
+        <?php } ?>
+        </tbody>
+    </table>
+</div>
+</form>
+
+<style>
+.dbupgrade_all_actions {display:flex;width:100%;margin:0 0 20px;justify-content:flex-end;gap:5px}
+.dbupgrade_all_actions form {margin:0}
+.dbupgrade_all_actions .dbupgrade_existing_action {margin-right:auto}
+.dbupgrade_all_actions .btn_submit {display:inline-block;float:none;position:static;width:auto;height:30px;margin:0;padding:0 15px;border:0}
+.dbupgrade_sort {width:100%; border:0; background:transparent; color:inherit; font:inherit; cursor:pointer}
+#dbupgrade_migration_table td.dbupgrade_description {text-align:left}
+#dbupgrade_migration_table th.dbupgrade_description, #dbupgrade_migration_table th.dbupgrade_description .dbupgrade_sort {text-align:center}
+.btn_frmline:disabled {background:#b7b7b7;color:#fff;cursor:not-allowed}
+</style>
+<script>
+(function () {
+    var table = document.getElementById('dbupgrade_migration_table');
+    if (!table || !table.tBodies.length) {
+        return;
+    }
+
+    var buttons = table.querySelectorAll('.dbupgrade_sort');
+    var tbody = table.tBodies[0];
+
+    function getCellText(row, column) {
+        return row.cells[column] ? row.cells[column].textContent.replace(/^\s+|\s+$/g, '') : '';
+    }
+
+    function sortRows(button, initialAscending) {
+        var column = parseInt(button.getAttribute('data-column'), 10);
+        var header = button.parentNode;
+        var ascending = typeof initialAscending === 'boolean' ? initialAscending : header.getAttribute('aria-sort') !== 'ascending';
+        var rows = Array.prototype.slice.call(tbody.rows);
+
+        rows.sort(function (left, right) {
+            var leftText = getCellText(left, column);
+            var rightText = getCellText(right, column);
+            var compared = leftText.localeCompare(rightText, undefined, {numeric: true, sensitivity: 'base'});
+
+            return ascending ? compared : -compared;
+        });
+
+        for (var i = 0; i < buttons.length; i++) {
+            buttons[i].parentNode.setAttribute('aria-sort', 'none');
+            buttons[i].getElementsByTagName('span')[0].textContent = '';
+        }
+        header.setAttribute('aria-sort', ascending ? 'ascending' : 'descending');
+        button.getElementsByTagName('span')[0].textContent = ascending ? '▲' : '▼';
+
+        for (var j = 0; j < rows.length; j++) {
+            tbody.appendChild(rows[j]);
+        }
+    }
+
+    for (var i = 0; i < buttons.length; i++) {
+        buttons[i].onclick = function () {
+            sortRows(this);
+        };
+    }
+
+    if (buttons.length) {
+        sortRows(buttons[0], false);
+    }
+}());
+</script>
+
 <?php
-include_once ('./admin.tail.php');
+include_once('./admin.tail.php');

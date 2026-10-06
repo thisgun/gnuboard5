@@ -5,7 +5,7 @@ if (!defined('_GNUBOARD_')) exit; // 개별 페이지 접근 불가
 add_stylesheet('<link rel="stylesheet" href="'.$member_skin_url.'/style.css">', 0);
 
 if($config['cf_cert_use'] && ($config['cf_cert_simple'] || $config['cf_cert_ipin'] || $config['cf_cert_hp'])) { ?>
-    <script src="<?php echo G5_JS_URL ?>/certify.js?v=<?php echo G5_JS_VER; ?>"></script>    
+    <script src="<?php echo get_versioned_asset_url(G5_JS_URL.'/certify.js'); ?>"></script>
 <?php } ?>
 
 <!-- 회원정보 찾기 시작 { -->
@@ -91,6 +91,10 @@ $(function() {
             case 'kcp':
                 $cert_url = G5_KCPCERT_URL.'/kcpcert_form.php';
                 $cert_type = 'kcp-hp';
+                break;
+            case 'kcp_v2':
+                $cert_url = G5_KCPCERT_V2_URL.'/kcpcert_form.php';
+                $cert_type = 'kcp_v2-hp';
                 break;
             case 'lg':
                 $cert_url = G5_LGXPAY_URL.'/AuthOnlyReq.php';

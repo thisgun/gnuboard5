@@ -67,14 +67,12 @@ for ($i=0; $row=sql_fetch_array($result); $i++)
     for ($i=0; $i<$len; $i++)
         $nbsp .= "&nbsp;&nbsp;&nbsp;";
 
-    $category_select .= "<option value=\"{$row['ca_id']}\">$nbsp{$row['ca_name']}</option>\n";
+    // 전체 카테고리 경로 표시
+    $category_path = function_exists('get_shop_category_path') ? get_shop_category_path($row['ca_id']) : $row['ca_name'];
+    $category_select .= "<option value=\"{$row['ca_id']}\">$nbsp{$category_path}</option>\n";
 }
 
 // 모바일 1줄당 이미지수 필드 추가
-if(!sql_query(" select ev_mobile_list_row from {$g5['g5_shop_event_table']} limit 1 ", false)) {
-    sql_query(" ALTER TABLE `{$g5['g5_shop_event_table']}`
-                    ADD `ev_mobile_list_row` int(11) NOT NULL DEFAULT '0' AFTER `ev_mobile_list_mod` ", true);
-}
 
 include_once (G5_ADMIN_PATH.'/admin.head.php');
 ?>

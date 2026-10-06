@@ -8,10 +8,6 @@ check_admin_token();
 
 $result = sql_query("describe `{$g5['sms5_write_table']}`");
 while ($row = sql_fetch_array($result)){
-    if( $row['Field'] === 'wr_message' && $row['Type'] === 'varchar(255)' ){
-        sql_query("ALTER TABLE `{$g5['sms5_write_table']}` MODIFY wr_message TEXT NOT NULL;", false);
-        break;
-    }
 }
 
 $g5['title'] = "문자전송중";
@@ -25,8 +21,8 @@ if ( ! (($config['cf_icode_id'] && $config['cf_icode_pw']) || $config['cf_icode_
 }
 
 $wr_reply   = isset($_REQUEST['wr_reply']) ? preg_replace('#[^0-9\-]#', '', trim($_REQUEST['wr_reply'])) : '';
-$wr_message = isset($_REQUEST['wr_message']) ? clean_xss_tags(trim($_REQUEST['wr_message']), 1, 1, 0, 0) : '';
-$send_list = isset($_REQUEST['send_list']) ? clean_xss_tags(trim($_REQUEST['send_list']), 1, 1) : '';
+$wr_message = isset($_REQUEST['wr_message']) ? addslashes(clean_xss_tags(stripslashes(trim($_REQUEST['wr_message'])), 1, 1, 0, 0)) : '';
+$send_list = isset($_REQUEST['send_list']) ? addslashes(clean_xss_tags(stripslashes(trim($_REQUEST['send_list'])), 1, 1)) : '';
 
 $wr_by = isset($_REQUEST['wr_by']) ? clean_xss_tags(trim($_REQUEST['wr_by']), 1, 1) : '';
 $wr_bm = isset($_REQUEST['wr_bm']) ? clean_xss_tags(trim($_REQUEST['wr_bm']), 1, 1) : '';
@@ -125,7 +121,7 @@ while ($row = array_shift($send_list))
                     continue 2;
                 }
 
-                array_push($list, array('bk_hp' => $hp, 'bk_name' => $name));
+                array_push($list, array('bk_hp' => $hp, 'bk_name' => $name, 'mb_id' => '', 'bg_no' => '', 'bk_no' => ''));
                 array_push($hps, $hp);
                 break;
 

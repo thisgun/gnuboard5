@@ -4,14 +4,19 @@ include_once('./_common.php');
 $ca_id = isset($_REQUEST['ca_id']) ? safe_replace_regex($_REQUEST['ca_id'], 'ca_id') : '';
 $skin = isset($_REQUEST['skin']) ? safe_replace_regex($_REQUEST['skin'], 'skin') : '';
 
-// 상품 리스트에서 다른 필드로 정렬을 하려면 아래의 배열 코드에서 해당 필드를 추가하세요.
-if( isset($sort) && ! in_array($sort, array('it_name', 'it_sum_qty', 'it_price', 'it_use_avg', 'it_use_cnt', 'it_update_time')) ){
-    $sort='';
-}
-
 if (G5_IS_MOBILE) {
     include_once(G5_MSHOP_PATH.'/list.php');
     return;
+}
+
+// 테마에 list.php 있으면 include
+if(defined('G5_THEME_SHOP_PATH')) {
+    $theme_list_file = G5_THEME_SHOP_PATH.'/list.php';
+    if(is_file($theme_list_file)) {
+        include_once($theme_list_file);
+        return;
+    }
+    unset($theme_list_file);
 }
 
 $sql = " select * from {$g5['g5_shop_category_table']} where ca_id = '$ca_id' and ca_use = '1'  ";
@@ -37,7 +42,8 @@ if(!$is_admin && $config['cf_cert_use']) {
 
 $g5['title'] = $ca['ca_name'].' 상품리스트';
 
-if ($ca['ca_include_head'] && is_include_path_check($ca['ca_include_head']))
+if ($ca['ca_include_head'] && is_include_path_check($ca['ca_include_head'])
+    && (!function_exists('is_content_include_allowed') || is_content_include_allowed($ca['ca_include_head'])))
     @include_once($ca['ca_include_head']);
 else
     include_once(G5_SHOP_PATH.'/_head.php');
@@ -161,7 +167,8 @@ var itemlist_ca_id = "<?php echo $ca_id; ?>";
 <!-- } 상품 목록 끝 -->
 
 <?php
-if ($ca['ca_include_tail'] && is_include_path_check($ca['ca_include_tail']))
+if ($ca['ca_include_tail'] && is_include_path_check($ca['ca_include_tail'])
+    && (!function_exists('is_content_include_allowed') || is_content_include_allowed($ca['ca_include_tail'])))
     @include_once($ca['ca_include_tail']);
 else
     include_once(G5_SHOP_PATH.'/_tail.php');

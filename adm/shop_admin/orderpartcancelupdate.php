@@ -4,6 +4,10 @@ include_once('./_common.php');
 
 auth_check_menu($auth, $sub_menu, "w");
 
+check_admin_token();
+
+$od_id = isset($_POST['od_id']) ? safe_replace_regex($_POST['od_id'], 'od_id') : '';
+$mod_memo = isset($_POST['mod_memo']) ? trim(clean_xss_tags($_POST['mod_memo'], 1, 1)) : '';
 $tax_mny = isset($_POST['mod_tax_mny']) ? preg_replace('/[^0-9]/', '', $_POST['mod_tax_mny']) : 0;
 $free_mny = isset($_POST['mod_free_mny']) ? preg_replace('/[^0-9]/', '', $_POST['mod_free_mny']) : 0;
 
@@ -22,6 +26,10 @@ if(! (isset($od['od_id']) && $od['od_id']))
 
 if($od['od_settle_case'] == '계좌이체' && substr($od['od_receipt_time'], 0, 10) >= G5_TIME_YMD)
     alert_close('실시간 계좌이체건의 부분취소 요청은 결제일 익일에 가능합니다.');
+
+if ($od['od_pg'] === 'KAKAOPAY') {
+    alert_close('SIRK 전용 카카오페이의 자동 취소 지원이 종료되었습니다. 이니시스 상점관리자에서 실제 취소 후 주문 상태와 환불금액을 확인해 주십시오.');
+}
 
 // 금액비교
 $od_misu = abs($od['od_misu']);
@@ -42,7 +50,7 @@ include_once(G5_PATH.'/head.sub.php');
 ?>
 
 <script>
-alert("<?php echo $od['od_settle_case']; ?> 부분취소 처리됐습니다.");
+alert("<?php echo get_text($od['od_settle_case']); ?> 부분취소 처리됐습니다.");
 opener.document.location.reload();
 self.close();
 </script>

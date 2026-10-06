@@ -105,13 +105,15 @@ else if ($w == "u")
                     and b.ca_mb_id = '{$member['mb_id']}' ";
         $row = sql_fetch($sql);
         if (!$row['it_id'])
-            alert("\'{$member['mb_id']}\' 님께서 수정 할 권한이 없는 상품입니다.");
+            alert("'{$member['mb_id']}' 님께서 수정 할 권한이 없는 상품입니다.");
     }
 
     $it = get_shop_item($it_id);
 
     if(!$it)
         alert('상품정보가 존재하지 않습니다.');
+    
+    if (function_exists('check_case_exist_title')) check_case_exist_title($it, G5_SHOP_DIR, false);
 
     if (! (isset($ca_id) && $ca_id))
         $ca_id = $it['ca_id'];
@@ -144,9 +146,11 @@ for ($i=0; $row=sql_fetch_array($result); $i++)
     $nbsp = "";
     for ($i=0; $i<$len; $i++)
         $nbsp .= "&nbsp;&nbsp;&nbsp;";
-
-    $category_select .= "<option value=\"{$row['ca_id']}\">$nbsp{$row['ca_name']}</option>\n";
-
+    
+    // 전체 카테고리 경로 표시 (예: 남성의류 > 상의 > 셔츠)
+    $category_path = function_exists('get_shop_category_path') ? get_shop_category_path($row['ca_id']) : $row['ca_name'];
+    $category_select .= "<option value=\"{$row['ca_id']}\">$nbsp{$category_path}</option>\n";
+    
     $script .= "ca_use['{$row['ca_id']}'] = {$row['ca_use']};\n";
     $script .= "ca_stock_qty['{$row['ca_id']}'] = {$row['ca_stock_qty']};\n";
     //$script .= "ca_explan_html['$row[ca_id]'] = $row[ca_explan_html];\n";
@@ -154,29 +158,13 @@ for ($i=0; $row=sql_fetch_array($result); $i++)
 }
 
 // 재입고알림 설정 필드 추가
-if(!sql_query(" select it_stock_sms from {$g5['g5_shop_item_table']} limit 1 ", false)) {
-    sql_query(" ALTER TABLE `{$g5['g5_shop_item_table']}`
-                    ADD `it_stock_sms` tinyint(4) NOT NULL DEFAULT '0' AFTER `it_stock_qty` ", true);
-}
 
 // 추가옵션 포인트 설정 필드 추가
-if(!sql_query(" select it_supply_point from {$g5['g5_shop_item_table']} limit 1 ", false)) {
-    sql_query(" ALTER TABLE `{$g5['g5_shop_item_table']}`
-                    ADD `it_supply_point` int(11) NOT NULL DEFAULT '0' AFTER `it_point_type` ", true);
-}
 
 // 상품메모 필드 추가
-if(!sql_query(" select it_shop_memo from {$g5['g5_shop_item_table']} limit 1 ", false)) {
-    sql_query(" ALTER TABLE `{$g5['g5_shop_item_table']}`
-                    ADD `it_shop_memo` text NOT NULL AFTER `it_use_avg` ", true);
-}
 
 // 지식쇼핑 PID 필드추가
 // 상품메모 필드 추가
-if(!sql_query(" select ec_mall_pid from {$g5['g5_shop_item_table']} limit 1 ", false)) {
-    sql_query(" ALTER TABLE `{$g5['g5_shop_item_table']}`
-                    ADD `ec_mall_pid` varchar(255) NOT NULL AFTER `it_shop_memo` ", true);
-}
 
 $pg_anchor ='<ul class="anchor">
 <li><a href="#anc_sitfrm_cate">상품분류</a></li>
@@ -195,17 +183,8 @@ $pg_anchor ='<ul class="anchor">
 
 
 // 쿠폰적용안함 설정 필드 추가
-if(!sql_query(" select it_nocoupon from {$g5['g5_shop_item_table']} limit 1", false)) {
-    sql_query(" ALTER TABLE `{$g5['g5_shop_item_table']}`
-                    ADD `it_nocoupon` tinyint(4) NOT NULL DEFAULT '0' AFTER `it_use` ", true);
-}
 
 // 스킨필드 추가
-if(!sql_query(" select it_skin from {$g5['g5_shop_item_table']} limit 1", false)) {
-    sql_query(" ALTER TABLE `{$g5['g5_shop_item_table']}`
-                    ADD `it_skin` varchar(255) NOT NULL DEFAULT '' AFTER `ca_id3`,
-                    ADD `it_mobile_skin` varchar(255) NOT NULL DEFAULT '' AFTER `it_skin` ", true);
-}
 ?>
 
 <form name="fitemform" action="./itemformupdate.php" method="post" enctype="MULTIPART/FORM-DATA" autocomplete="off" onsubmit="return fitemformcheck(this)">
@@ -1392,7 +1371,9 @@ $(function(){
                             for ($i=0; $i<$len; $i++)
                                 $nbsp .= "&nbsp;&nbsp;&nbsp;";
 
-                            echo "<option value=\"{$row['ca_id']}\">$nbsp{$row['ca_name']}</option>\n";
+                            // 전체 카테고리 경로 표시
+                            $category_path = function_exists('get_shop_category_path') ? get_shop_category_path($row['ca_id']) : $row['ca_name'];
+                            echo "<option value=\"{$row['ca_id']}\">$nbsp{$category_path}</option>\n";
                         }
                     ?>
                 </select>

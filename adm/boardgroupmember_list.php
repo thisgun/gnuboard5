@@ -13,6 +13,11 @@ $sql_common = " from {$g5['group_member_table']} a
                          left outer join {$g5['member_table']} b on (a.mb_id = b.mb_id) ";
 $sql_search = " where gr_id = '{$gr_id}' ";
 
+$allowed_sfl = array('a.mb_id');
+if (!in_array($sfl, $allowed_sfl)) {
+    $sfl = 'a.mb_id';
+}
+
 // 회원아이디로 검색되지 않던 오류를 수정
 if (isset($stx) && $stx) {
     $sql_search .= " and ( ";
@@ -28,6 +33,9 @@ if (!$sst) {
     $sst = "gm_datetime";
     $sod = "desc";
 }
+$allowed_sst = array('gm_datetime', 'b.mb_id', 'b.mb_name', 'b.mb_nick', 'b.mb_today_login', 'a.gm_datetime');
+if ($sst && !in_array($sst, $allowed_sst)) $sst = 'gm_datetime';
+if ($sod && !in_array(strtolower($sod), array('asc', 'desc'))) $sod = '';
 $sql_order = " order by {$sst} {$sod} ";
 
 $sql = " select count(*) as cnt

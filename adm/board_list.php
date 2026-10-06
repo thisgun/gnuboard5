@@ -12,6 +12,11 @@ if ($is_admin != "super") {
     $sql_search .= " and (a.gr_id = b.gr_id and b.gr_admin = '{$member['mb_id']}') ";
 }
 
+$allowed_sfl = array('bo_table', 'bo_subject', 'a.gr_id');
+if (!in_array($sfl, $allowed_sfl)) {
+    $sfl = 'bo_table';
+}
+
 if ($stx) {
     $sql_search .= " and ( ";
     switch ($sfl) {
@@ -32,6 +37,9 @@ if (!$sst) {
     $sst  = "a.gr_id, a.bo_table";
     $sod = "asc";
 }
+$allowed_sst = array('a.gr_id', 'bo_table', 'bo_skin', 'bo_mobile_skin', 'bo_subject', 'bo_use_sns', 'bo_use_search', 'bo_order', 'a.gr_id, a.bo_table');
+if ($sst && !in_array($sst, $allowed_sst)) $sst = 'a.gr_id, a.bo_table';
+if ($sod && !in_array(strtolower($sod), array('asc', 'desc'))) $sod = '';
 $sql_order = " order by $sst $sod ";
 
 $sql = " select count(*) as cnt {$sql_common} {$sql_search} {$sql_order} ";

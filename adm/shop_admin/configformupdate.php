@@ -15,6 +15,16 @@ if(! (isset($_POST['de_admin_company_tel']) && check_vaild_callback($_POST['de_a
 // 로그인을 바로 이 주소로 하는 경우 쇼핑몰설정값이 사라지는 현상을 방지
 if (!$_POST['de_admin_company_owner']) goto_url("./configform.php");
 
+$logo_img_fields = array('logo_img', 'logo_img2', 'mobile_logo_img', 'mobile_logo_img2');
+foreach ($logo_img_fields as $logo_img_field) {
+    if (isset($_FILES[$logo_img_field]['name']) && $_FILES[$logo_img_field]['name']) {
+        $filename = get_safe_filename($_FILES[$logo_img_field]['name']);
+        if (is_disallowed_active_filename($filename)) {
+            alert('허용되지 않는 파일 확장자입니다.');
+        }
+    }
+}
+
 if (! empty($_POST['logo_img_del']))  @unlink(G5_DATA_PATH."/common/logo_img");
 if (! empty($_POST['logo_img_del2']))  @unlink(G5_DATA_PATH."/common/logo_img2");
 if (! empty($_POST['mobile_logo_img_del']))  @unlink(G5_DATA_PATH."/common/mobile_logo_img");
@@ -28,8 +38,8 @@ if ($_FILES['mobile_logo_img2']['name']) upload_file($_FILES['mobile_logo_img2']
 $de_kcp_mid = isset($_POST['de_kcp_mid']) ? substr($_POST['de_kcp_mid'], 0, 3) : '';
 $cf_icode_server_port = isset($cf_icode_server_port) ? preg_replace('/[^0-9]/', '', $cf_icode_server_port) : '7295';
 
-$de_shop_skin = isset($_POST['de_shop_skin']) ? preg_replace('#\.+(\/|\\\)#', '', $_POST['de_shop_skin']) : 'basic';
-$de_shop_mobile_skin = isset($_POST['de_shop_mobile_skin']) ? preg_replace('#\.+(\/|\\\)#', '', $_POST['de_shop_mobile_skin']) : 'basic';
+$de_shop_skin = isset($_POST['de_shop_skin']) ? preg_replace(array('#\.+(\/|\\\)#', '#[\'\"]#'), array('', ''), $_POST['de_shop_skin']) : 'basic';
+$de_shop_mobile_skin = isset($_POST['de_shop_mobile_skin']) ? preg_replace(array('#\.+(\/|\\\)#', '#[\'\"]#'), array('', ''), $_POST['de_shop_mobile_skin']) : 'basic';
 
 $skins = get_skin_dir('shop');
 
@@ -59,11 +69,13 @@ $de_shop_mobile_skin = in_array($de_shop_mobile_skin, $mobile_skins) ? $de_shop_
 $check_skin_keys = array('de_type1_list_skin', 'de_type2_list_skin', 'de_type3_list_skin', 'de_type4_list_skin', 'de_type5_list_skin', 'de_mobile_type1_list_skin', 'de_mobile_type2_list_skin', 'de_mobile_type3_list_skin', 'de_mobile_type4_list_skin', 'de_mobile_type5_list_skin', 'de_rel_list_skin', 'de_mobile_rel_list_skin', 'de_search_list_skin', 'de_mobile_search_list_skin', 'de_listtype_list_skin', 'de_mobile_listtype_list_skin');
 
 foreach($check_skin_keys as $key){
-    $$key = $_POST[$key] = isset($_POST[$key]) ? preg_replace('#\.+(\/|\\\)#', '', strip_tags($_POST[$key])) : '';
+    $$key = $_POST[$key] = isset($_POST[$key]) ? preg_replace(array('#\.+(\/|\\\)#', '#[\'\"]#'), array('', ''), strip_tags($_POST[$key])) : '';
 
     if( isset($_POST[$key]) && preg_match('#\.+(\/|\\\)#', $_POST[$key]) ){
         alert('스킨설정에 유효하지 문자가 포함되어 있습니다.');
     }
+    
+    $$key = $_POST[$key] = sql_real_escape_string($_POST[$key]);
 }
 
 // 현금영수증 발급수단
@@ -76,15 +88,16 @@ if(isset($_POST['de_taxsave_types_transfer']) && $_POST['de_taxsave_types_transf
 	$de_taxsave_types .= ',transfer';
 }
 
-// NHN_KCP 간편결제 체크
-$de_easy_pay_services = '';
-if(isset($_POST['de_easy_pays'])){
-    $tmps = array();
-    foreach( (array) $_POST['de_easy_pays'] as $v ){
-        $tmps[] = preg_replace('/[^0-9a-z_\-]/i', '', $v);
-    }
-    $de_easy_pay_services = implode(",", $tmps);
+// 알려진 PG별 간편결제 설정만 저장한다. 선택 해제도 명시적으로 보존한다.
+$easy_allowed = array('global_nhnkcp_naverpay', 'used_nhnkcp_naverpay_point');
+foreach (array('kcp', 'inicis', 'toss', 'nicepay') as $easy_pg) {
+    $easy_allowed = array_merge($easy_allowed, array_keys(shop_easypay_catalog($easy_pg)));
 }
+$easy_selected = array();
+foreach (isset($_POST['de_easy_pays']) ? (array) $_POST['de_easy_pays'] : array() as $easy_key) {
+    if (is_string($easy_key) && in_array($easy_key, $easy_allowed, true)) $easy_selected[] = $easy_key;
+}
+$de_easy_pay_services = implode(',', array_unique(array_merge($easy_selected, array('inicis_configured', 'toss_configured'))));
 
 //KVE-2019-0689, KVE-2019-0691, KVE-2019-0694
 $check_sanitize_keys = array(
@@ -159,18 +172,24 @@ $check_sanitize_keys = array(
 'de_kcp_site_key',              //NHN KCP SITE KEY
 'cf_lg_mid',                    //LG유플러스 상점아이디
 'cf_lg_mert_key',               //LG유플러스 MERT KEY
+'cf_toss_client_key',           //토스페이먼츠 MERT KEY
+'cf_toss_secret_key',           //토스페이먼츠 MERT KEY
 'de_inicis_mid',                //KG이니시스 상점아이디
-'de_inicis_admin_key',          //KG이니시스 키패스워드
+'de_inicis_iniapi_key',         //KG이니시스 INIAPI KEY
+'de_inicis_iniapi_iv',          //KG이니시스 INIAPI IV
 'de_inicis_sign_key',           //KG이니시스 웹결제 사인키
+'de_inicis_pro_use',            //KG이니시스 INIpay PRO 사용
+'de_inicis_hash_key',           //KG이니시스 INIpay PRO HashKey
+'de_inicis_pro_alert_use',      //KG이니시스 INIpay PRO 이상 거래 알림
+'de_inicis_pro_reconcile_use',  //KG이니시스 INIpay PRO 자동 거래대사
+'de_inicis_pro_log_days',       //KG이니시스 INIpay PRO 상세 이력 보존기간
+'de_inicis_pro_summary_days',   //KG이니시스 INIpay PRO 결제 요약 보존기간
 'de_samsung_pay_use',           //KG이니시스 삼성페이 사용
 'de_inicis_lpay_use',           //KG이니시스 Lpay 사용
 'de_inicis_kakaopay_use',       //KG이니시스 카카오페이 사용
 'de_inicis_cartpoint_use',      //KG이니시스 신용카드 포인트 결제
-'de_kakaopay_mid',              //카카오페이 상점MID
-'de_kakaopay_key',              //카카오페이 상점키
-'de_kakaopay_enckey',           //카카오페이 상점 EncKey
-'de_kakaopay_hashkey',          //카카오페이 상점 HashKey
-'de_kakaopay_cancelpwd',        //카카오페이 결제취소 비밀번호
+'de_nicepay_mid',               //NICEPAY 상점아이디
+'de_nicepay_key',               //NICEPAY 상점키
 'de_naverpay_mid',              //네이버페이 가맹점 아이디
 'de_naverpay_cert_key',         //네이버페이 가맹점 인증키
 'de_naverpay_button_key',       //네이버페이 버튼 인증키
@@ -240,10 +259,38 @@ $check_sanitize_keys = array(
 
 foreach( $check_sanitize_keys as $key ){
     if( in_array($key, array('de_bank_account')) ){
-        $$key = isset($_POST[$key]) ? clean_xss_tags($_POST[$key], 1, 1, 0, 0) : '';
+        $$key = isset($_POST[$key]) ? addslashes(clean_xss_tags(stripslashes($_POST[$key]), 1, 1, 0, 0)) : '';
     } else {
-        $$key = isset($_POST[$key]) ? clean_xss_tags($_POST[$key], 1, 1) : '';
+        $$key = isset($_POST[$key]) ? addslashes(clean_xss_tags(stripslashes($_POST[$key]), 1, 1)) : '';
     }
+}
+
+// 구버전 결제 코드 및 기존 스킨과의 호환을 위해 개별 컬럼도 동기화한다.
+foreach (shop_easypay_legacy_keys() as $easy_key => $legacy_key) {
+    $$legacy_key = (int) in_array($easy_key, $easy_selected, true);
+}
+
+$de_inicis_pro_use = !empty($de_inicis_pro_use) ? 1 : 0;
+$de_inicis_hash_key = preg_replace('/[^A-Za-z0-9+\/=_-]/', '', $de_inicis_hash_key);
+
+$de_inicis_pro_alert_use = !empty($de_inicis_pro_alert_use) ? 1 : 0;
+$de_inicis_pro_reconcile_use = !empty($de_inicis_pro_reconcile_use) ? 1 : 0;
+$de_inicis_pro_log_days = (int) $de_inicis_pro_log_days;
+if ($de_inicis_pro_log_days !== 0 && ($de_inicis_pro_log_days < 30 || $de_inicis_pro_log_days > 3650))
+    alert('INIpay PRO 상세 이력 보존기간은 0 또는 30~3650일로 설정해 주십시오.');
+$de_inicis_pro_summary_days = (int) $de_inicis_pro_summary_days;
+if ($de_inicis_pro_summary_days !== 0 && ($de_inicis_pro_summary_days < 365 || $de_inicis_pro_summary_days > 3650))
+    alert('INIpay PRO 결제 요약 보존기간은 0 또는 365~3650일로 설정해 주십시오.');
+
+if ($de_pg_service === 'inicis' && $de_inicis_pro_use) {
+    if (empty($de_card_test) && $de_inicis_hash_key === '')
+        alert('INIpay PRO를 사용하려면 HashKey를 입력해 주십시오.');
+    if (!function_exists('curl_init'))
+        alert('INIpay PRO를 사용하려면 PHP cURL 모듈이 필요합니다.');
+    if (!function_exists('hash') || !in_array('sha512', hash_algos()))
+        alert('INIpay PRO를 사용하려면 SHA-512 해시 지원이 필요합니다.');
+    if ($de_inicis_pro_reconcile_use && empty($de_card_test) && trim($de_inicis_iniapi_key) === '')
+        alert('INIpay PRO 자동 거래대사를 사용하려면 INIAPI KEY를 입력해 주십시오.');
 }
 
 $warning_msg = '';
@@ -254,11 +301,6 @@ if($de_pg_service == 'kcp' && ! $de_card_test && ($de_iche_use || $de_vbank_use 
         alert('NHN KCP SITE KEY를 입력해 주십시오.');
 }
 
-if( $de_kakaopay_enckey && ($de_pg_service === 'inicis' || $de_inicis_lpay_use || $de_inicis_kakaopay_use) ){
-    
-    $warning_msg = 'KG 이니시스 결제 또는 L.pay 또는 KG이니시스 카카오페이를 사용시 결제모듈 중복문제로 카카오페이를 활성화 할수 없습니다. \\n\\n카카오페이 사용을 비활성화 합니다.';
-    $de_kakaopay_enckey = '';
-}
 
 //
 // 영카트 default
@@ -376,6 +418,8 @@ $sql = " update {$g5['g5_shop_default_table']}
                 de_inicis_lpay_use            = '{$de_inicis_lpay_use}',
                 de_inicis_kakaopay_use        = '{$de_inicis_kakaopay_use}',
                 de_inicis_cartpoint_use       = '{$de_inicis_cartpoint_use}',
+                de_nicepay_mid                = '{$de_nicepay_mid}',
+                de_nicepay_key                = '{$de_nicepay_key}',
                 de_card_noint_use             = '{$de_card_noint_use}',
                 de_card_point                 = '{$de_card_point}',
                 de_settle_min_point           = '{$de_settle_min_point}',
@@ -399,8 +443,15 @@ $sql = " update {$g5['g5_shop_default_table']}
                 de_kcp_mid                    = '{$de_kcp_mid}',
                 de_kcp_site_key               = '{$de_kcp_site_key}',
                 de_inicis_mid                 = '{$de_inicis_mid}',
-                de_inicis_admin_key           = '{$de_inicis_admin_key}',
+                de_inicis_iniapi_key          = '{$de_inicis_iniapi_key}',
+                de_inicis_iniapi_iv           = '{$de_inicis_iniapi_iv}',
                 de_inicis_sign_key            = '{$de_inicis_sign_key}',
+                de_inicis_pro_use             = '{$de_inicis_pro_use}',
+                de_inicis_hash_key            = '{$de_inicis_hash_key}',
+                de_inicis_pro_alert_use       = '{$de_inicis_pro_alert_use}',
+                de_inicis_pro_reconcile_use   = '{$de_inicis_pro_reconcile_use}',
+                de_inicis_pro_log_days        = '{$de_inicis_pro_log_days}',
+                de_inicis_pro_summary_days    = '{$de_inicis_pro_summary_days}',
                 de_iche_use                   = '{$de_iche_use}',
                 de_sms_cont1                  = '{$_POST['de_sms_cont1']}',
                 de_sms_cont2                  = '{$_POST['de_sms_cont2']}',
@@ -426,11 +477,6 @@ $sql = " update {$g5['g5_shop_default_table']}
                 de_hp_use                     = '{$de_hp_use}',
                 de_escrow_use                 = '{$de_escrow_use}',
                 de_tax_flag_use               = '{$de_tax_flag_use}',
-                de_kakaopay_mid               = '{$de_kakaopay_mid}',
-                de_kakaopay_key               = '{$de_kakaopay_key}',
-                de_kakaopay_enckey            = '{$de_kakaopay_enckey}',
-                de_kakaopay_hashkey           = '{$de_kakaopay_hashkey}',
-                de_kakaopay_cancelpwd         = '{$de_kakaopay_cancelpwd}',
                 de_member_reg_coupon_use      = '{$de_member_reg_coupon_use}',
                 de_member_reg_coupon_term     = '{$de_member_reg_coupon_term}',
                 de_member_reg_coupon_price    = '{$de_member_reg_coupon_price}',
@@ -459,7 +505,9 @@ $sql = " update {$g5['config_table']}
                 cf_icode_server_port    = '{$_POST['cf_icode_server_port']}',
                 cf_icode_token_key      = '{$cf_icode_token_key}',
                 cf_lg_mid               = '{$cf_lg_mid}',
-                cf_lg_mert_key          = '{$cf_lg_mert_key}' ";
+                cf_lg_mert_key          = '{$cf_lg_mert_key}',
+                cf_toss_client_key      = '{$cf_toss_client_key}',
+                cf_toss_secret_key      = '{$cf_toss_secret_key}' ";
 sql_query($sql);
 
 run_event('shop_admin_configformupdate');

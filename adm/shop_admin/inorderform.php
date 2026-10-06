@@ -20,6 +20,8 @@ if (!$od['od_id']) {
 
 // 주문정보
 $data = unserialize(base64_decode($od['dt_data']));
+$data_od_cp_id = isset($data['od_cp_id']) ? safe_replace_regex($data['od_cp_id'], 'cp_id') : '';
+$data_sc_cp_id = isset($data['sc_cp_id']) ? safe_replace_regex($data['sc_cp_id'], 'cp_id') : '';
 
 $sql_common = " from {$g5['g5_shop_cart_table']} where od_id = '{$od['cart_id']}' and ct_status = '쇼핑' and ct_select = '1' ";
 
@@ -38,8 +40,8 @@ if($od['mb_id']) {
     $it_cp_cnt = (isset($data['cp_id']) && is_array($data['cp_id'])) ? count($data['cp_id']) : 0;
     $arr_it_cp_prc = array();
     for($i=0; $i<$it_cp_cnt; $i++) {
-        $cid = $data['cp_id'][$i];
-        $it_id = $data['it_id'][$i];
+        $cid = isset($data['cp_id'][$i]) ? safe_replace_regex($data['cp_id'][$i], 'cp_id') : '';
+        $it_id = isset($data['it_id'][$i]) ? safe_replace_regex($data['it_id'][$i], 'it_id') : '';
         $sql = " select cp_id, cp_method, cp_target, cp_type, cp_price, cp_trunc, cp_minimum, cp_maximum
                     from {$g5['g5_shop_coupon_table']}
                     where cp_id = '$cid'
@@ -98,10 +100,10 @@ if($od['mb_id']) {
     $tot_od_price -= $tot_it_cp_price;
 
     // 주문쿠폰
-    if(isset($data['od_cp_id']) && $data['od_cp_id']) {
+    if($data_od_cp_id) {
         $sql = " select cp_id, cp_type, cp_price, cp_trunc, cp_minimum, cp_maximum
                     from {$g5['g5_shop_coupon_table']}
-                    where cp_id = '{$data['od_cp_id']}'
+                    where cp_id = '$data_od_cp_id'
                       and mb_id IN ( '{$od['mb_id']}', '전체회원' )
                       and cp_method = '2' ";
         $cp = sql_fetch($sql);
@@ -134,10 +136,10 @@ $od_send_cost = get_sendcost($od['cart_id']);
 $tot_sc_cp_price = 0;
 if($od['mb_id'] && $od_send_cost > 0) {
     // 배송쿠폰
-    if($data['sc_cp_id']) {
+    if($data_sc_cp_id) {
         $sql = " select cp_id, cp_type, cp_price, cp_trunc, cp_minimum, cp_maximum
                     from {$g5['g5_shop_coupon_table']}
-                    where cp_id = '{$data['sc_cp_id']}'
+                    where cp_id = '$data_sc_cp_id'
                       and mb_id IN ( '{$od['mb_id']}', '전체회원' )
                       and cp_method = '3' ";
         $cp = sql_fetch($sql);
@@ -365,7 +367,7 @@ $pg_anchor = '<ul class="anchor">
         <tbody>
         <tr>
             <td><?php echo $od['od_id']; ?></td>
-            <td class="td_paybybig"><?php echo $s_receipt_way; ?></td>
+            <td class="td_paybybig"><?php echo get_text($s_receipt_way); ?></td>
             <td class="td_numbig td_numsum"><?php echo display_price($amount['order']); ?></td>
             <td class="td_numbig"><?php echo display_price($od_send_cost + $od_send_cost2); ?></td>
             <td class="td_numbig"><?php echo display_point($od_temp_point); ?></td>
@@ -485,7 +487,7 @@ $pg_anchor = '<ul class="anchor">
                 <tr>
                     <th scope="row"><span class="sound_only">주문하시는 분 </span>주소</th>
                     <td>
-                        <span><?php echo $data['od_zip']; ?></span>
+                        <span><?php echo get_text($data['od_zip']); ?></span>
                         <span><?php echo get_text($data['od_addr1']); ?></span>
                         <span><?php echo get_text($data['od_addr2']); ?></span>
                         <span><?php echo get_text($data['od_addr3']); ?></span>
@@ -526,7 +528,7 @@ $pg_anchor = '<ul class="anchor">
                 <tr>
                     <th scope="row"><span class="sound_only">받으시는 분 </span>주소</th>
                     <td>
-                        <span><?php echo $data['od_b_zip']; ?></span>
+                        <span><?php echo get_text($data['od_b_zip']); ?></span>
                         <span><?php echo get_text($data['od_b_addr1']); ?></span>
                         <span><?php echo get_text($data['od_b_addr2']); ?></span>
                         <span><?php echo get_text($data['od_b_addr3']); ?></span>
@@ -536,7 +538,7 @@ $pg_anchor = '<ul class="anchor">
                 <?php if ($default['de_hope_date_use']) { ?>
                 <tr>
                     <th scope="row">희망배송일</th>
-                    <td><?php echo $data['od_hope_date']; ?> (<?php echo get_yoil($data['od_hope_date']); ?>)</td>
+                    <td><?php echo get_text($data['od_hope_date']); ?> (<?php echo get_yoil($data['od_hope_date']); ?>)</td>
                 </tr>
                 <?php } ?>
                 <tr>

@@ -20,6 +20,8 @@ if( isset($row['it_seo_title']) && ! $row['it_seo_title'] ){
     shop_seo_title_update($row['it_id']);
 }
 
+if (function_exists('check_case_exist_title')) check_case_exist_title($it, G5_SHOP_DIR, true);
+
 if (!($it['ca_use'] && $it['it_use'])) {
     if (!$is_admin)
         alert('현재 판매가능한 상품이 아닙니다.');
@@ -105,7 +107,8 @@ define('G5_SHOP_CSS_URL', str_replace(G5_PATH, G5_URL, $skin_dir));
 $g5['title'] = $it['it_name'].' &gt; '.$it['ca_name'];
 
 // 분류 상단 코드가 있으면 출력하고 없으면 기본 상단 코드 출력
-if ($ca['ca_include_head'] && is_include_path_check($ca['ca_include_head']))
+if ($ca['ca_include_head'] && is_include_path_check($ca['ca_include_head'])
+    && (!function_exists('is_content_include_allowed') || is_content_include_allowed($ca['ca_include_head'])))
     @include_once($ca['ca_include_head']);
 else
     include_once(G5_SHOP_PATH.'/_head.php');
@@ -252,7 +255,7 @@ include_once(G5_SHOP_PATH.'/settle_naverpay.inc.php');
 ?>
 
 <?php if($is_orderable) { ?>
-<script src="<?php echo G5_JS_URL; ?>/shop.js"></script>
+<script src="<?php echo get_versioned_asset_url(G5_JS_URL.'/shop.js'); ?>"></script>
 <?php } ?>
 
 <div id="sit">
@@ -278,7 +281,8 @@ echo run_replace('shop_it_tail_html', conv_content($it['it_tail_html'], 1), $it)
 ?>
 
 <?php
-if ($ca['ca_include_tail'] && is_include_path_check($ca['ca_include_tail']))
+if ($ca['ca_include_tail'] && is_include_path_check($ca['ca_include_tail'])
+    && (!function_exists('is_content_include_allowed') || is_content_include_allowed($ca['ca_include_tail'])))
     @include_once($ca['ca_include_tail']);
 else
     include_once(G5_SHOP_PATH.'/_tail.php');

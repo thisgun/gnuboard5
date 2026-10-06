@@ -16,6 +16,7 @@ $sort2 = (isset($_GET['sort2']) && in_array($_GET['sort2'], array('desc', 'asc')
 $sel_field = (isset($_GET['sel_field']) && in_array($_GET['sel_field'], array('od_id', 'mb_id', 'od_name', 'od_tel', 'od_hp', 'od_b_name', 'od_b_tel', 'od_b_hp', 'od_deposit_name', 'od_invoice')) ) ? $_GET['sel_field'] : ''; 
 $od_status = isset($_GET['od_status']) ? get_search_string($_GET['od_status']) : '';
 $search = isset($_GET['search']) ? get_search_string($_GET['search']) : '';
+$save_search = isset($_GET['save_search']) ? get_search_string($_GET['save_search']) : '';
 
 $fr_date = (isset($_GET['fr_date']) && preg_match("/^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[1-2][0-9]|3[0-1])$/", $_GET['fr_date'])) ? $_GET['fr_date'] : '';
 $to_date = (isset($_GET['to_date']) && preg_match("/^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[1-2][0-9]|3[0-1])$/", $_GET['to_date'])) ? $_GET['to_date'] : '';
@@ -25,8 +26,8 @@ $od_cancel_price = isset($_GET['od_cancel_price']) ? preg_replace('/[^0-9a-z]/i'
 $od_refund_price = isset($_GET['od_refund_price']) ? preg_replace('/[^0-9a-z]/i', '', $_GET['od_refund_price']) : '';
 $od_receipt_point = isset($_GET['od_receipt_point']) ? preg_replace('/[^0-9a-z]/i', '', $_GET['od_receipt_point']) : '';
 $od_coupon = isset($_GET['od_coupon']) ? preg_replace('/[^0-9a-z]/i', '', $_GET['od_coupon']) : ''; 
-$od_settle_case = isset($_GET['od_settle_case']) ? clean_xss_tags($_GET['od_settle_case'], 1, 1) : ''; 
-$od_escrow = isset($_GET['od_escrow']) ? clean_xss_tags($_GET['od_escrow'], 1, 1) : ''; 
+$od_settle_case = isset($_GET['od_settle_case']) ? addslashes(clean_xss_tags(stripslashes($_GET['od_settle_case']), 1, 1)) : '';
+$od_escrow = isset($_GET['od_escrow']) ? addslashes(clean_xss_tags(stripslashes($_GET['od_escrow']), 1, 1)) : '';
 
 $tot_itemcount = $tot_orderprice = $tot_receiptprice = $tot_ordercancel = $tot_misu = $tot_couponprice = 0;
 $sql_search = "";
@@ -139,12 +140,6 @@ $qstr = "$qstr1&amp;sort1=$sort1&amp;sort2=$sort2&amp;page=$page";
 $listall = '<a href="'.$_SERVER['SCRIPT_NAME'].'" class="ov_listall">전체목록</a>';
 
 // 주문삭제 히스토리 테이블 필드 추가
-if(!sql_query(" select mb_id from {$g5['g5_shop_order_delete_table']} limit 1 ", false)) {
-    sql_query(" ALTER TABLE `{$g5['g5_shop_order_delete_table']}`
-                    ADD `mb_id` varchar(20) NOT NULL DEFAULT '' AFTER `de_data`,
-                    ADD `de_ip` varchar(255) NOT NULL DEFAULT '' AFTER `mb_id`,
-                    ADD `de_datetime` datetime NOT NULL DEFAULT '0000-00-00 00:00:00' AFTER `de_ip` ", true);
-}
 
 if( function_exists('pg_setting_check') ){
 	pg_setting_check(true);
@@ -160,11 +155,11 @@ if( function_exists('pg_setting_check') ){
 </div>
 
 <form name="frmorderlist" class="local_sch01 local_sch">
-<input type="hidden" name="doc" value="<?php echo $doc; ?>">
-<input type="hidden" name="sort1" value="<?php echo $sort1; ?>">
-<input type="hidden" name="sort2" value="<?php echo $sort2; ?>">
-<input type="hidden" name="page" value="<?php echo $page; ?>">
-<input type="hidden" name="save_search" value="<?php echo $search; ?>">
+<input type="hidden" name="doc" value="<?php echo get_sanitize_input($doc); ?>">
+<input type="hidden" name="sort1" value="<?php echo get_sanitize_input($sort1); ?>">
+<input type="hidden" name="sort2" value="<?php echo get_sanitize_input($sort2); ?>">
+<input type="hidden" name="page" value="<?php echo get_sanitize_input($page); ?>">
+<input type="hidden" name="save_search" value="<?php echo get_sanitize_input($search); ?>">
 
 <label for="sel_field" class="sound_only">검색대상</label>
 <select name="sel_field" id="sel_field">
@@ -222,7 +217,7 @@ if( function_exists('pg_setting_check') ){
     <input type="radio" name="od_settle_case" value="신용카드" id="od_settle_case06" <?php echo get_checked($od_settle_case, '신용카드');  ?>>
     <label for="od_settle_case06">신용카드</label>
     <input type="radio" name="od_settle_case" value="간편결제" id="od_settle_case07" <?php echo get_checked($od_settle_case, '간편결제');  ?>>
-    <label for="od_settle_case07" data-tooltip-text="NHN_KCP 간편결제 : PAYCO, 네이버페이, 카카오페이(NHN_KCP) &#xa;LG유플러스 간편결제 : PAYNOW &#xa;KG 이니시스 간편결제 : KPAY, 삼성페이, LPAY, 카카오페이(KG이니시스)">PG간편결제</label>
+    <label for="od_settle_case07" data-tooltip-text="NHN_KCP 간편결제 : PAYCO, 네이버페이, 카카오페이(NHN_KCP), 애플페이(NHN_KCP) &#xa;LG유플러스 간편결제 : PAYNOW &#xa;KG 이니시스 간편결제 : KPAY, 삼성페이, LPAY, 카카오페이(KG이니시스)">PG간편결제</label>
     <input type="radio" name="od_settle_case" value="KAKAOPAY" id="od_settle_case08" <?php echo get_checked($od_settle_case, 'KAKAOPAY');  ?>>
     <label for="od_settle_case08">KAKAOPAY</label>
 </div>
@@ -304,7 +299,7 @@ if( function_exists('pg_setting_check') ){
         $s_receipt_way = $s_br = "";
         if ($row['od_settle_case'])
         {
-            $s_receipt_way = check_pay_name_replace($row['od_settle_case'], $row);
+            $s_receipt_way = get_text(check_pay_name_replace($row['od_settle_case'], $row));
             $s_br = '<br />';
         }
         else
@@ -349,7 +344,7 @@ if( function_exists('pg_setting_check') ){
         if($default['de_escrow_use'] && $row['od_escrow'])
             $od_paytype .= '<span class="list_escrow">에스크로</span>';
 
-        $uid = md5($row['od_id'].$row['od_time'].$row['od_ip']);
+        $uid = function_exists('get_shop_uid') ? get_shop_uid('order', $row['od_id'], $row['od_time'], $row['od_ip']) : md5($row['od_id'].$row['od_time'].$row['od_ip']);
 
         $invoice_time = is_null_time($row['od_invoice_time']) ? G5_TIME_YMDHIS : $row['od_invoice_time'];
         $delivery_company = $row['od_delivery_company'] ? $row['od_delivery_company'] : $default['de_delivery_company'];
@@ -401,7 +396,7 @@ if( function_exists('pg_setting_check') ){
             <?php echo $row['od_status']; ?>
         </td>
         <td headers="odrpay" class="odrpay">
-            <input type="hidden" name="current_settle_case[<?php echo $i ?>]" value="<?php echo $row['od_settle_case'] ?>">
+            <input type="hidden" name="current_settle_case[<?php echo $i ?>]" value="<?php echo get_text($row['od_settle_case']) ?>">
             <?php echo $s_receipt_way; ?>
         </td>
         <td headers="delino" class="delino">

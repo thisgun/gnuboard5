@@ -1,5 +1,6 @@
 <?php
 if (!defined('_GNUBOARD_')) exit; // 개별 페이지 접근 불가
+include_once(G5_LIB_PATH.'/shop_order_access.lib.php');
 
 require_once(G5_SHOP_PATH.'/settle_'.$default['de_pg_service'].'.inc.php');
 
@@ -7,7 +8,9 @@ require_once(G5_SHOP_PATH.'/settle_'.$default['de_pg_service'].'.inc.php');
 require_once(G5_SHOP_PATH.'/'.$default['de_pg_service'].'/orderform.1.php');
 ?>
 
+<script src="<?php echo G5_JS_URL; ?>/shop.order-state.js"></script>
 <form name="forderform" id="forderform" method="post" action="<?php echo $order_action_url; ?>" autocomplete="off">
+<?php echo shop_order_checkout_fields((string)$pp['pp_id'], true); ?>
 <input type="hidden" name="pp_id" value="<?php echo $pp['pp_id']; ?>">
 
     <?php
@@ -62,8 +65,18 @@ require_once(G5_SHOP_PATH.'/'.$default['de_pg_service'].'/orderform.1.php');
         $checked = '';
 
         $escrow_title = "";
+        $escrow_products = array(); // 토스페이먼츠 escrowProducts 배열 생성
         if ($default['de_escrow_use']) {
             $escrow_title = "에스크로<br>";
+             
+            // 토스페이먼츠 escrowProducts 배열에 상품 정보 추가
+            $escrow_products[] = array(
+                'id'        => $pp['pp_id'],
+                'name'      => $pp['pp_name'].'님 개인결제',
+                'code'      => $pp['pp_id'],
+                'unitPrice' => (int) $pp['pp_price'],
+                'quantity'  => (int) 1
+            );  
         }
 
         if ($default['de_vbank_use'] || $default['de_iche_use'] || $default['de_card_use'] || $default['de_hp_use']) {
@@ -89,7 +102,7 @@ require_once(G5_SHOP_PATH.'/'.$default['de_pg_service'].'/orderform.1.php');
 	        // 계좌이체 사용
 	        if ($default['de_iche_use']) {
 	            $multi_settle++;
-	            echo '<input type="radio" id="pp_settle_iche" name="pp_settle_case" value="계좌이체" '.$checked.'> <label for="pp_settle_iche" class="lb_icon"><span></span>'.$escrow_title.'계좌이체</label>'.PHP_EOL;
+	            echo '<input type="radio" id="pp_settle_iche" name="pp_settle_case" value="계좌이체" '.$checked.'> <label for="pp_settle_iche" class="lb_icon"><span></span>'.$escrow_title. ($default['de_pg_service'] == 'toss' ? '퀵계좌이체' :'계좌이체') . '</label>'.PHP_EOL;
 	            $checked = '';
 	        }
 			?>
@@ -233,6 +246,28 @@ function forderform_check(f)
             f.LGD_CUSTOM_FIRSTPAY.value = "무통장";
             break;
     }
+    <?php } else if($default['de_pg_service'] == 'toss') { ?>
+    switch(settle_method)
+    {        
+        case "계좌이체":
+            f.method.value = "TRANSFER";
+            break;
+        case "가상계좌":
+            f.method.value = "VIRTUAL_ACCOUNT";
+            break;
+        case "휴대폰":
+            f.method.value = "MOBILE_PHONE";
+            break;
+        case "신용카드":
+            f.method.value = "CARD";
+            break;
+        case "간편결제":
+            f.method.value = "CARD";
+            break;
+        default:
+            f.method.value = "무통장";
+            break;
+    }
     <?php }  else if($default['de_pg_service'] == 'inicis') { ?>
     switch(settle_method)
     {
@@ -252,8 +287,34 @@ function forderform_check(f)
             f.gopaymethod.value = "무통장";
             break;
     }
-    <?php } ?>
+    <?php } else if($default['de_pg_service'] == 'nicepay') { ?>
+    f.DirectShowOpt.value = "";     // 간편결제 요청 값 초기화
+    f.DirectEasyPay.value = "";     // 간편결제 요청 값 초기화
+    f.NicepayReserved.value = "";   // 간편결제 요청 값 초기화
+    f.EasyPayMethod.value = "";   // 간편결제 요청 값 초기화
 
+        <?php if ($default['de_escrow_use']) {  // 간편결제시 에스크로값이 0이 되므로 기본설정값을 지정 ?>
+        f.TransType.value = "1";
+        <?php } ?>
+    switch(settle_method)
+    {
+        case "계좌이체":
+            f.PayMethod.value = "BANK";
+            break;
+        case "가상계좌":
+            f.PayMethod.value = "VBANK";
+            break;
+        case "휴대폰":
+            f.PayMethod.value = "CELLPHONE";
+            break;
+        case "신용카드":
+            f.PayMethod.value = "CARD";
+            break;
+        default:
+            f.PayMethod.value = "무통장";
+            break;
+    }
+    <?php } ?>
     // 결제정보설정
     <?php if($default['de_pg_service'] == 'kcp') { ?>
     f.buyr_name.value = f.pp_name.value;
@@ -284,6 +345,59 @@ function forderform_check(f)
         f.submit();
     }
     <?php } ?>
+    <?php if($default['de_pg_service'] == 'toss') { ?>
+
+    f.orderId.value = '<?=$od_id?>';
+    f.orderName.value = '<?=$goods?>';
+
+    f.customerName.value = f.pp_name.value;
+    f.customerEmail.value = f.pp_email.value;
+    f.customerMobilePhone.value = f.pp_hp.value.replace(/[^0-9]/g, '');
+
+    f.cardUseCardPoint.value = false;
+    f.cardUseAppCardOnly.value = false;
+
+    <?php if($default['de_escrow_use']) { ?>
+    f.cardUseEscrow.value = 'true';
+    f.escrowProducts.value = JSON.stringify(<?php echo json_encode($escrow_products, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>);
+    <?php } ?>
+
+    if(settle_method == "간편결제") {
+        f.cardflowMode.value = 'DIRECT';
+    }
+
+    f.amountCurrency.value = 'KRW';
+    f.amountValue.value = f.good_mny.value;
+    <?php if($default['de_tax_flag_use']) { ?>
+    f.taxFreeAmount.value = f.comm_free_mny.value;
+    <?php } ?>
+    f.windowTarget.value = 'iframe';
+
+    if(f.method.value != "무통장") {
+        // 주문정보 임시저장
+        var order_data = $(f).serialize();
+        var save_result = "결제 요청을 저장하지 못했습니다.";
+        $.ajax({
+            type: "POST",
+            data: order_data,
+            url: g5_url+"/shop/ajax.orderdatasave.php",
+            cache: false,
+            async: false,
+            success: function(data, textStatus, xhr) {
+                save_result = data || g5_order_state_accept(xhr);
+            }
+        });
+
+        if(save_result) {
+            alert(save_result);
+            return false;
+        }
+
+          launchCrossPlatform(f);
+    } else {
+        f.submit();
+    }
+    <?php } ?>
     <?php if($default['de_pg_service'] == 'inicis') { ?>
     f.price.value       = f.good_mny.value;
     f.buyername.value   = f.pp_name.value;
@@ -293,15 +407,15 @@ function forderform_check(f)
     if(f.gopaymethod.value != "무통장") {
         // 주문정보 임시저장
         var order_data = $(f).serialize();
-        var save_result = "";
+        var save_result = "결제 요청을 저장하지 못했습니다.";
         $.ajax({
             type: "POST",
             data: order_data,
             url: g5_url+"/shop/ajax.orderdatasave.php",
             cache: false,
             async: false,
-            success: function(data) {
-                save_result = data;
+            success: function(data, textStatus, xhr) {
+                save_result = data || g5_order_state_accept(xhr);
             }
         });
 
@@ -310,13 +424,57 @@ function forderform_check(f)
             return false;
         }
 
+        <?php if (!empty($inicis_pro_use)) { ?>
+        return inicis_pro_pay("<?php echo $od_id; ?>", "WEB");
+        <?php } else { ?>
         if(!make_signature(f))
             return false;
 
         paybtn(f);
+        <?php } ?>
     } else {
         f.submit();
     }
     <?php } ?>
+    <?php if($default['de_pg_service'] == 'nicepay') { ?>
+    f.Amt.value       = f.good_mny.value;
+    <?php if($default['de_tax_flag_use']) { ?>
+    f.SupplyAmt.value         = f.comm_tax_mny.value;
+    f.GoodsVat.value     = f.comm_vat_mny.value;
+    f.TaxFreeAmt.value     = f.comm_free_mny.value;
+    <?php } ?>
+    f.BuyerName.value   = f.pp_name.value;
+    f.BuyerEmail.value  = f.pp_email.value;
+    f.BuyerTel.value    = f.pp_hp.value;
+
+    if(f.PayMethod.value != "무통장") {
+        // 주문정보 임시저장
+        var order_data = $(f).serialize();
+        var save_result = "결제 요청을 저장하지 못했습니다.";
+        $.ajax({
+            type: "POST",
+            data: order_data,
+            url: g5_url+"/shop/ajax.orderdatasave.php",
+            cache: false,
+            async: false,
+            success: function(data, textStatus, xhr) {
+                save_result = data || g5_order_state_accept(xhr);
+            }
+        });
+
+        if(save_result) {
+            alert(save_result);
+            return false;
+        }
+
+        if(!nicepay_create_signdata(f))
+            return false;
+        
+        nicepayStart(f);
+    } else {
+        f.submit();
+    }
+    <?php } ?>
+
 }
 </script>

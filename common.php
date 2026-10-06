@@ -29,6 +29,10 @@ for ($i=0; $i<$ext_cnt; $i++) {
 }
 //==========================================================================================================================
 
+// Cloudflare 사용시 REMOTE_ADDR 에 사용자 IP 적용과 https 사용 여부
+if (isset($_SERVER['HTTP_CF_CONNECTING_IP'])) {
+    include_once('cloudflare.check.php');    // cloudflare 의 ip 대역인지 체크
+}
 
 function g5_path()
 {
@@ -58,7 +62,7 @@ include_once($g5_path['path'].'/config.php');   // 설정 파일
 unset($g5_path);
 
 // IIS 에서 SERVER_ADDR 서버변수가 없다면
-if(! isset($_SERVER['SERVER_ADDR'])) {
+if (!isset($_SERVER['SERVER_ADDR'])) {
     $_SERVER['SERVER_ADDR'] = isset($_SERVER['LOCAL_ADDR']) ? $_SERVER['LOCAL_ADDR'] : '';
 }
 
@@ -121,6 +125,10 @@ $_REQUEST = array_map_deep(G5_ESCAPE_FUNCTION,  $_REQUEST);
 
 // PHP 4.1.0 부터 지원됨
 // php.ini 의 register_globals=off 일 경우
+
+// 관리자 메뉴 코드는 각 스크립트가 직접 지정하므로 요청값이 개입하지 못하게 한다.
+unset($_GET['sub_menu'], $_POST['sub_menu'], $_REQUEST['sub_menu'], $_SERVER['sub_menu']);
+
 @extract($_GET);
 @extract($_POST);
 @extract($_SERVER);
@@ -161,6 +169,11 @@ if (file_exists($dbconfig_file)) {
     sql_set_charset(G5_DB_CHARSET, $connect_db);
     if(defined('G5_MYSQL_SET_MODE') && G5_MYSQL_SET_MODE) sql_query("SET SESSION sql_mode = ''");
     if (defined('G5_TIMEZONE')) sql_query(" set time_zone = '".G5_TIMEZONE."'");
+
+    // 자동 로그인 토큰 테이블 - 기존 dbconfig.php에 정의되지 않은 경우 fallback
+    if (!isset($g5['member_auto_login_table'])) {
+        $g5['member_auto_login_table'] = G5_TABLE_PREFIX.'member_auto_login';
+    }
 } else {
 ?>
 
@@ -221,7 +234,12 @@ ini_set("session.gc_maxlifetime", 10800); // session data의 garbage collection 
 ini_set("session.gc_probability", 1); // session.gc_probability는 session.gc_divisor와 연계하여 gc(쓰레기 수거) 루틴의 시작 확률을 관리합니다. 기본값은 1입니다. 자세한 내용은 session.gc_divisor를 참고하십시오.
 ini_set("session.gc_divisor", 100); // session.gc_divisor는 session.gc_probability와 결합하여 각 세션 초기화 시에 gc(쓰레기 수거) 프로세스를 시작할 확률을 정의합니다. 확률은 gc_probability/gc_divisor를 사용하여 계산합니다. 즉, 1/100은 각 요청시에 GC 프로세스를 시작할 확률이 1%입니다. session.gc_divisor의 기본값은 100입니다.
 
-session_set_cookie_params(0, '/');
+if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] != 'off') {
+    session_set_cookie_params(0, '/', null, true, true);
+} else {
+    session_set_cookie_params(0, '/', null, false, true);
+}
+
 ini_set("session.cookie_domain", G5_COOKIE_DOMAIN);
 
 function chrome_domain_session_name(){
@@ -281,7 +299,7 @@ if( ! class_exists('XenoPostToForm') ){
         public static function makeInputArray($posts) {
             $res = array();
             foreach($posts as $k => $v) {
-                $res[] = self::makeInputArray_($k, $v);
+                $res[] = self::makeInputArray_(htmlspecialchars($k), $v);
             }
             return implode('', $res);
         }
@@ -316,7 +334,6 @@ if( !function_exists('shop_check_is_pay_page') ){
             $mobile_dir.'/'.$shop_dir.'/lg/returnurl.php',
             $mobile_dir.'/'.$shop_dir.'/lg/xpay_approval.php',
             $mobile_dir.'/'.$shop_dir.'/kcp/order_approval_form.php',
-            $shop_dir.'/kakaopay/inicis_kk_return.php',     // 이니시스 카카오페이 (SIRK 로 시작하는 아이디 전용)
             $plugin_dir."/inicert/ini_result.php", // 이니시스 간편인증 모듈 2021-09-10 http <-> https 간 세션 공유 문제로 인해 추가
             $plugin_dir."/inicert/ini_find_result.php", // 이니시스 간편인증 모듈 2021-09-10 http <-> https 간 세션 공유 문제로 인해 추가
         );
@@ -337,7 +354,11 @@ if( !function_exists('shop_check_is_pay_page') ){
 // PG 결제시에 세션이 없으면 내 호출페이지를 다시 호출하여 쿠키 PHPSESSID를 살려내어 세션값을 정상적으로 불러오게 합니다.
 // 위와 같이 코드를 전부 한페이지에 넣은 이유는 이전 버전 사용자들이 패치시 어려울수 있으므로 한페이지에 코드를 다 넣었습니다.
 if(XenoPostToForm::check()) {
-    if ( shop_check_is_pay_page() ){	// PG 결제 리턴페이지에서만 사용
+    // 토큰 복귀는 실제 엔드포인트에서 DB 해시를 검증한다. 여기서는 쿠키 재전송만 생략한다.
+    $g5_order_token_return = isset($_REQUEST['g5_order_state']) && is_string($_REQUEST['g5_order_state']) &&
+        preg_match('/\A[0-9]{1,20}\.[a-f0-9]{64}\z/D', $_REQUEST['g5_order_state']) &&
+        preg_match('~/mobile/shop/kcp/order_approval_form\.php$~', str_replace('\\', '/', $_SERVER['SCRIPT_NAME']));
+    if ( shop_check_is_pay_page() && !$g5_order_token_return ){	// PG 결제 리턴페이지에서만 사용
         XenoPostToForm::submit($_POST); // session_start(); 하기 전에
     }
 }
@@ -366,8 +387,7 @@ if( $config['cf_cert_use'] || (defined('G5_YOUNGCART_VER') && G5_YOUNGCART_VER) 
                     || preg_match('/(iPhone|iPod|iPad).*AppleWebKit.*Safari/i', $_SERVER['HTTP_USER_AGENT'])
                     || preg_match('~MSIE|Internet Explorer~i', $_SERVER['HTTP_USER_AGENT'])
                     || preg_match('~Trident/7.0(; Touch)?; rv:11.0~',$_SERVER['HTTP_USER_AGENT'])
-                    || !(isset($_SERVER['HTTPS']) && $_SERVER['HTTPS']=='on')
-                    || !(isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] == "https")){
+                    || !(isset($_SERVER['HTTPS']) && $_SERVER['HTTPS']=='on')) {
                     return $res;
                 }
             }
@@ -377,7 +397,7 @@ if( $config['cf_cert_use'] || (defined('G5_YOUNGCART_VER') && G5_YOUNGCART_VER) 
             $cookie_session_name = method_exists('XenoPostToForm', 'g5_session_name') ? XenoPostToForm::g5_session_name() : 'PHPSESSID'; 
             foreach ($headers as $header) {
                 if (!preg_match('~^Set-Cookie: '.$cookie_session_name.'=~', $header)) continue;
-                $header = preg_replace('~; secure(; HttpOnly)?$~', '', $header) . '; secure; SameSite=None';
+                $header = preg_replace('~(; secure; HttpOnly)?$~', '; secure; HttpOnly; SameSite=None', $header);
                 header($header, false);
                 $g5['session_cookie_samesite'] = 'none';
                 break;
@@ -417,7 +437,7 @@ if (isset($_REQUEST['sca']))  {
 
 if (isset($_REQUEST['sfl']))  {
     $sfl = trim($_REQUEST['sfl']);
-    $sfl = preg_replace("/[\<\>\'\"\\\'\\\"\%\=\(\)\/\^\*\s]/", "", $sfl);
+    $sfl = preg_replace("/[\<\>\'\"\\\'\\\"\%\=\(\)\/\^\*\s\#]/", "", $sfl);
     if ($sfl)
         $qstr .= '&amp;sfl=' . urlencode($sfl); // search field (검색 필드)
 } else {
@@ -480,6 +500,7 @@ if (isset($_REQUEST['w'])) {
     $w = '';
 }
 
+/** @var int $wr_id 게시판 글의 ID */
 if (isset($_REQUEST['wr_id'])) {
     $wr_id = (int)$_REQUEST['wr_id'];
 } else {
@@ -495,14 +516,15 @@ if (isset($_REQUEST['bo_table']) && ! is_array($_REQUEST['bo_table'])) {
 
 // URL ENCODING
 if (isset($_REQUEST['url'])) {
-    $url = strip_tags(trim($_REQUEST['url']));
+    $url = preg_replace('|[^a-z0-9-~+_.?#=!&;,/:%@$\|*\'()\[\]\\x80-\\xff]|i', '', trim($_REQUEST['url']));
     $urlencode = urlencode($url);
 } else {
     $url = '';
     $urlencode = urlencode($_SERVER['REQUEST_URI']);
     if (G5_DOMAIN) {
         $p = @parse_url(G5_DOMAIN);
-        $urlencode = G5_DOMAIN.urldecode(preg_replace("/^".urlencode($p['path'])."/", "", $urlencode));
+        $p['path'] = isset($p['path']) ? $p['path'] : '/';
+        $urlencode = rtrim(G5_DOMAIN, '%2F').'%2F'.ltrim(urldecode(preg_replace("/^".urlencode($p['path'])."/", "", $urlencode)), '%2F');
     }
 }
 
@@ -514,7 +536,6 @@ if (isset($_REQUEST['gr_id'])) {
     $gr_id = '';
 }
 //===================================
-
 
 // 자동로그인 부분에서 첫로그인에 포인트 부여하던것을 로그인중일때로 변경하면서 코드도 대폭 수정하였습니다.
 if (isset($_SESSION['ss_mb_id']) && $_SESSION['ss_mb_id']) { // 로그인중이라면
@@ -547,17 +568,30 @@ if (isset($_SESSION['ss_mb_id']) && $_SESSION['ss_mb_id']) { // 로그인중이�
         $tmp_mb_id = substr(preg_replace("/[^a-zA-Z0-9_]*/", "", $tmp_mb_id), 0, 20);
         // 최고관리자는 자동로그인 금지
         if (strtolower($tmp_mb_id) !== strtolower($config['cf_admin'])) {
-            $sql = " select mb_password, mb_intercept_date, mb_leave_date, mb_email_certify, mb_datetime from {$g5['member_table']} where mb_id = '{$tmp_mb_id}' ";
-            $row = sql_fetch($sql);
-            if($row['mb_password']){
-                $key = md5($_SERVER['SERVER_ADDR'] . $_SERVER['SERVER_SOFTWARE'] . $_SERVER['HTTP_USER_AGENT'] . $row['mb_password']);
-                // 쿠키에 저장된 키와 같다면
-                $tmp_key = get_cookie('ck_auto');
-                if ($tmp_key === $key && $tmp_key) {
+            // 쿠키 값을 g5_member_auto_login 테이블의 토큰과 비교
+            // 다중 디바이스 지원을 위해 회원당 여러 토큰을 별도 테이블에 저장
+            $tmp_key = get_cookie('ck_auto');
+            // 토큰 형식 검증 (64자 hex) - 빈 값/잘못된 형식 차단
+            if ($tmp_key && preg_match('/^[a-f0-9]{64}$/', $tmp_key)) {
+                $tmp_key_hash = hash('sha256', $tmp_key);  // 쿠키 값을 해시해서 DB와 비교
+                $sql = " select al.al_id, al.al_expire,
+                                m.mb_intercept_date, m.mb_leave_date, m.mb_email_certify, m.mb_datetime
+                           from {$g5['member_auto_login_table']} al
+                           inner join {$g5['member_table']} m on m.mb_id = al.mb_id
+                          where al.mb_id = '{$tmp_mb_id}'
+                            and al.al_token = '{$tmp_key_hash}'
+                            and al.al_expire > '".G5_TIME_YMDHIS."' ";
+                $row = sql_fetch($sql);
+                if (isset($row['al_id']) && $row['al_id']) {
                     // 차단, 탈퇴가 아니고 메일인증이 사용이면서 인증을 받았다면
                     if ($row['mb_intercept_date'] == '' &&
                         $row['mb_leave_date'] == '' &&
                         (!$config['cf_use_email_certify'] || preg_match('/[1-9]/', $row['mb_email_certify'])) ) {
+                        // 마지막 사용 시간 갱신
+                        sql_query(" update {$g5['member_auto_login_table']}
+                                       set al_last_used = '".G5_TIME_YMDHIS."'
+                                     where al_id = '{$row['al_id']}' ");
+
                         // 세션에 회원아이디를 저장하여 로그인으로 간주
                         set_session('ss_mb_id', $tmp_mb_id);
                         if(function_exists('update_auth_session_token')) update_auth_session_token($row['mb_datetime']);
@@ -567,36 +601,80 @@ if (isset($_SESSION['ss_mb_id']) && $_SESSION['ss_mb_id']) { // 로그인중이�
                         exit;
                     }
                 }
+                // $row 배열변수 해제
+                unset($row);
             }
-            // $row 배열변수 해제
-            unset($row);
         }
     }
     // 자동로그인 end ---------------------------------------
 }
 
+// 최고관리자가 아니면 IP를 체크한다.
+if (!(isset($member['mb_id']) && $config['cf_admin'] === $member['mb_id'])) {
+    // 접근가능 IP
+    $cf_possible_ip = trim($config['cf_possible_ip']);
+    if ($cf_possible_ip) {
+        $is_possible_ip = false;
+        $pattern = explode("\n", $cf_possible_ip);
+        $pattern_cnt = count($pattern);
+        for ($i=0; $i<$pattern_cnt; $i++) {
+            $pattern[$i] = trim($pattern[$i]);
+            if (empty($pattern[$i]))
+                continue;
 
+            $pattern[$i] = str_replace(".", "\.", $pattern[$i]);
+            $pattern[$i] = str_replace("+", "[0-9\.]+", $pattern[$i]);
+            $pat = "/^{$pattern[$i]}$/";
+            $is_possible_ip = preg_match($pat, $_SERVER['REMOTE_ADDR']);
+            if ($is_possible_ip)
+                break;
+        }
+        if (!$is_possible_ip)
+            die ("<meta charset=utf-8>접근이 가능하지 않습니다.");
+    }
+
+    // 접근차단 IP
+    $is_intercept_ip = false;
+    $pattern = explode("\n", trim($config['cf_intercept_ip']));
+    $pattern_cnt = count($pattern);
+    for ($i=0; $i<$pattern_cnt; $i++) {
+        $pattern[$i] = trim($pattern[$i]);
+        if (empty($pattern[$i]))
+            continue;
+
+        $pattern[$i] = str_replace(".", "\.", $pattern[$i]);
+        $pattern[$i] = str_replace("+", "[0-9\.]+", $pattern[$i]);
+        $pat = "/^{$pattern[$i]}$/";
+        $is_intercept_ip = preg_match($pat, $_SERVER['REMOTE_ADDR']);
+        if ($is_intercept_ip)
+            die ("<meta charset=utf-8>접근 불가합니다.");
+    }
+}
+
+/** @var array $write 글 데이터 */
 $write = array();
+/** @var string $write_table 게시판 테이블 전체이름 */
 $write_table = '';
 if ($bo_table) {
     $board = get_board_db($bo_table, true);
     if (isset($board['bo_table']) && $board['bo_table']) {
         set_cookie("ck_bo_table", $board['bo_table'], 86400 * 1);
         $gr_id = $board['gr_id'];
-        $write_table = $g5['write_prefix'] . $bo_table; // 게시판 테이블 전체이름
+        // 게시판 테이블 전체이름
+        $write_table = $g5['write_prefix'] . $bo_table; 
 
         if (isset($wr_id) && $wr_id) {
             $write = get_write($write_table, $wr_id);
         } else if (isset($wr_seo_title) && $wr_seo_title) {
             $write = get_content_by_field($write_table, 'bbs', 'wr_seo_title', generate_seo_title($wr_seo_title));
-            if( isset($write['wr_id']) ){
-                $wr_id = $write['wr_id'];
+            if (isset($write['wr_id'])) {
+                $wr_id = (int) $write['wr_id'];
             }
         }
     }
-    
-    // 게시판에서 
-    if (isset($board['bo_select_editor']) && $board['bo_select_editor']){
+
+    // 게시판에서 사용하는 에디터를 설정
+    if (isset($board['bo_select_editor']) && $board['bo_select_editor']) {
         $config['cf_editor'] = $board['bo_select_editor'];
     }
 }
@@ -623,47 +701,6 @@ if (isset($member['mb_id']) && $member['mb_id']) {
     $member['mb_id'] = '';
     $member['mb_level'] = 1; // 비회원의 경우 회원레벨을 가장 낮게 설정
 }
-
-
-if ($is_admin != 'super') {
-    // 접근가능 IP
-    $cf_possible_ip = trim($config['cf_possible_ip']);
-    if ($cf_possible_ip) {
-        $is_possible_ip = false;
-        $pattern = explode("\n", $cf_possible_ip);
-        for ($i=0; $i<count($pattern); $i++) {
-            $pattern[$i] = trim($pattern[$i]);
-            if (empty($pattern[$i]))
-                continue;
-
-            $pattern[$i] = str_replace(".", "\.", $pattern[$i]);
-            $pattern[$i] = str_replace("+", "[0-9\.]+", $pattern[$i]);
-            $pat = "/^{$pattern[$i]}$/";
-            $is_possible_ip = preg_match($pat, $_SERVER['REMOTE_ADDR']);
-            if ($is_possible_ip)
-                break;
-        }
-        if (!$is_possible_ip)
-            die ("<meta charset=utf-8>접근이 가능하지 않습니다.");
-    }
-
-    // 접근차단 IP
-    $is_intercept_ip = false;
-    $pattern = explode("\n", trim($config['cf_intercept_ip']));
-    for ($i=0; $i<count($pattern); $i++) {
-        $pattern[$i] = trim($pattern[$i]);
-        if (empty($pattern[$i]))
-            continue;
-
-        $pattern[$i] = str_replace(".", "\.", $pattern[$i]);
-        $pattern[$i] = str_replace("+", "[0-9\.]+", $pattern[$i]);
-        $pat = "/^{$pattern[$i]}$/";
-        $is_intercept_ip = preg_match($pat, $_SERVER['REMOTE_ADDR']);
-        if ($is_intercept_ip)
-            die ("<meta charset=utf-8>접근 불가합니다.");
-    }
-}
-
 
 // 테마경로
 if(defined('_THEME_PREVIEW_') && _THEME_PREVIEW_ === true)
@@ -797,7 +834,9 @@ if (G5_IS_MOBILE) {
 
 
 // 방문자수의 접속을 남김
-include_once(G5_BBS_PATH.'/visit_insert.inc.php');
+if (!defined('G5_IS_CLI') || !G5_IS_CLI) {
+    include_once(G5_BBS_PATH.'/visit_insert.inc.php');
+}
 
 
 // 일정 기간이 지난 DB 데이터 삭제 및 최적화

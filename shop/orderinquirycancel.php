@@ -25,10 +25,34 @@ $sql = " select SUM(IF(ct_status = '주문', 1, 0)) as od_count2,
             where od_id = '$od_id' ";
 $ct = sql_fetch($sql);
 
-$uid = md5($od['od_id'].$od['od_time'].$od['od_ip']);
+$uid = function_exists('get_shop_uid') ? get_shop_uid('order', $od['od_id'], $od['od_time'], $od['od_ip']) : md5($od['od_id'].$od['od_time'].$od['od_ip']);
 
-if($od['od_cancel_price'] > 0 || $ct['od_count1'] != $ct['od_count2']) {
+// 비회원은 주문조회 인증을 통과한 본인 주문만 취소할 수 있다.
+if (empty($member['mb_id']) && (string) $uid !== (string) get_session('ss_orderview_uid'))
+    alert("본인 주문만 취소할 수 있습니다.", G5_SHOP_URL);
+
+if($od['od_cancel_price'] > 0 || $od['od_status'] != '주문' || $ct['od_count1'] != $ct['od_count2']) {
     alert("취소할 수 있는 주문이 아닙니다.", G5_SHOP_URL."/orderinquiryview.php?od_id=$od_id&amp;uid=$uid");
+}
+
+if ($od['od_pg'] === 'KAKAOPAY') {
+    alert('이 주문의 취소·환불은 쇼핑몰 고객센터에 문의해 주십시오.');
+}
+
+// INIpay PRO 가상계좌 입금통보와 주문자 취소가 동시에 처리되지 않도록
+// PG 취소부터 로컬 주문 취소 완료까지 동일 주문 잠금을 유지한다.
+$inicis_pro_order_lock = '';
+if (!empty($od['od_tno']) && $od['od_pg'] === 'inicis') {
+    include_once(G5_SHOP_PATH.'/inicis/pro/inicis_pro.lib.php');
+    $inicis_pro_tables = inicis_pro_audit_tables();
+    $inicis_pro_order = sql_fetch(" select ip_id from `{$inicis_pro_tables['summary']}`
+                                     where ip_oid = '".sql_escape_string($od['od_id'])."'
+                                       and ip_tid = '".sql_escape_string($od['od_tno'])."' ", false);
+    if (!empty($inicis_pro_order['ip_id'])) {
+        $inicis_pro_order_lock = inicis_pro_lock($od['od_id']);
+        if ($inicis_pro_order_lock === '')
+            alert('동일 주문의 결제 또는 통보 처리가 진행 중입니다. 잠시 후 다시 취소해 주십시오.', G5_SHOP_URL."/orderinquiryview.php?od_id=$od_id&amp;uid=$uid");
+    }
 }
 
 // PG 결제 취소
@@ -64,46 +88,73 @@ if($od['od_tno']) {
                 alert($msg);
             }
             break;
+        case 'toss':
+            $cancel_msg = '주문자 본인 취소-'.$cancel_memo;
+            include_once(G5_SHOP_PATH.'/toss/toss_cancel.php');
+            break;
         case 'inicis':
             include_once(G5_SHOP_PATH.'/settle_inicis.inc.php');
-            $cancel_msg = iconv_euckr('주문자 본인 취소-'.$cancel_memo);
+            $cancel_msg = '주문자 본인 취소-'.$cancel_memo;
 
-            /*********************
-             * 3. 취소 정보 설정 *
-             *********************/
-            $inipay->SetField("type",      "cancel");                        // 고정 (절대 수정 불가)
-            $inipay->SetField("mid",       $default['de_inicis_mid']);       // 상점아이디
-            /**************************************************************************************************
-             * admin 은 키패스워드 변수명입니다. 수정하시면 안됩니다. 1111의 부분만 수정해서 사용하시기 바랍니다.
-             * 키패스워드는 상점관리자 페이지(https://iniweb.inicis.com)의 비밀번호가 아닙니다. 주의해 주시기 바랍니다.
-             * 키패스워드는 숫자 4자리로만 구성됩니다. 이 값은 키파일 발급시 결정됩니다.
-             * 키패스워드 값을 확인하시려면 상점측에 발급된 키파일 안의 readme.txt 파일을 참조해 주십시오.
-             **************************************************************************************************/
-            $inipay->SetField("admin",     $default['de_inicis_admin_key']); //비대칭 사용키 키패스워드
-            $inipay->SetField("tid",       $od['od_tno']);                   // 취소할 거래의 거래아이디
-            $inipay->SetField("cancelmsg", $cancel_msg);                     // 취소사유
+            $args = array(
+                'paymethod' => get_type_inicis_paymethod($od['od_settle_case']),
+                'tid' => $od['od_tno'],
+                'audit_oid' => $od['od_id'],
+                'audit_source' => 'web',
+                'msg' => $cancel_msg
+            );
 
-            /****************
-             * 4. 취소 요청 *
-             ****************/
-            $inipay->startAction();
+            $response = inicis_tid_cancel($args);
+            $result = json_decode($response, true);
 
-            /****************************************************************
-             * 5. 취소 결과                                           	*
-             *                                                        	*
-             * 결과코드 : $inipay->getResult('ResultCode') ("00"이면 취소 성공)  	*
-             * 결과내용 : $inipay->getResult('ResultMsg') (취소결과에 대한 설명) 	*
-             * 취소날짜 : $inipay->getResult('CancelDate') (YYYYMMDD)          	*
-             * 취소시각 : $inipay->getResult('CancelTime') (HHMMSS)            	*
-             * 현금영수증 취소 승인번호 : $inipay->getResult('CSHR_CancelNum')    *
-             * (현금영수증 발급 취소시에만 리턴됨)                          *
-             ****************************************************************/
+            $res_cd = '';
+            $res_msg = 'curl 로 데이터를 받지 못했습니다.';
 
-            $res_cd  = $inipay->getResult('ResultCode');
-            $res_msg = $inipay->getResult('ResultMsg');
+            if (isset($result['resultCode'])) {
+                $res_cd = $result['resultCode'];
+                $res_msg = $result['resultMsg'];
+            } else {
+                $res_cd = '';
+                $res_msg = 'curl 로 데이터를 받지 못했습니다.';
+            }
 
             if($res_cd != '00') {
-                alert(iconv_utf8($res_msg).' 코드 : '.$res_cd);
+                alert($res_msg.' 코드 : '.$res_cd);
+            }
+            break;
+        case 'nicepay':
+            include_once(G5_SHOP_PATH.'/settle_nicepay.inc.php');
+            $cancel_msg = '주문자 본인 취소-'.$cancel_memo;
+
+            $tno = $od['od_tno'];
+
+            $cancelAmt = (int)$od['od_receipt_price'];
+            if($od['od_settle_case'] == '가상계좌' && $od['od_status'] == '주문' && $cancelAmt == 0)
+                $cancelAmt = (int)$od['od_misu'];
+
+            if($cancelAmt <= 0)
+                alert('취소 요청금액이 없습니다.', G5_SHOP_URL."/orderinquiryview.php?od_id=$od_id&amp;uid=$uid");
+
+            // 0:전체 취소, 1:부분 취소(별도 계약 필요)
+            $partialCancelCode = 0;
+
+            include G5_SHOP_PATH.'/nicepay/cancel_process.php';
+
+            $res_cd = '';
+            $res_msg = 'curl 로 데이터를 받지 못하거나 통신에 실패했습니다.';
+            
+            if (isset($result['ResultCode'])) {
+
+                $res_cd = $result['ResultCode'];
+
+                // 실패했다면
+                if (! in_array($result['ResultCode'], array('2001', '2211'), true)) {
+                    $res_msg = $result['ResultMsg'];
+                }
+            }
+
+            if(! in_array($res_cd, array('2001', '2211'), true)) {
+                alert($res_msg.' 코드 : '.$res_cd);
             }
             break;
         default:
@@ -150,11 +201,19 @@ $sql = " update {$g5['g5_shop_order_table']}
                 od_send_coupon = '0',
                 od_status = '취소',
                 od_shop_memo = concat(od_shop_memo,\"\\n주문자 본인 직접 취소 - ".G5_TIME_YMDHIS." (취소이유 : {$cancel_memo})\")
-            where od_id = '$od_id' ";
+            where od_id = '$od_id' 
+              and od_cancel_price = 0";
 sql_query($sql);
 
 // 주문취소 회원의 포인트를 되돌려 줌
-if ($od['od_receipt_point'] > 0)
-    insert_point($member['mb_id'], $od['od_receipt_point'], "주문번호 $od_id 본인 취소");
+// get_sql_affected_rows 함수가 존재하지 않으면 포인트를 돌려주는것을 실행 할수 없음
+$affected = function_exists('get_sql_affected_rows') ? get_sql_affected_rows() : 0;
+
+if ($od['od_receipt_point'] > 0 && $affected) {
+    insert_point($member['mb_id'], $od['od_receipt_point'], "주문번호 $od_id 본인 취소", '@shop_order', $od_id, 'cancel');
+}
+
+if ($inicis_pro_order_lock !== '')
+    inicis_pro_unlock($inicis_pro_order_lock);
 
 goto_url(G5_SHOP_URL."/orderinquiryview.php?od_id=$od_id&amp;uid=$uid");

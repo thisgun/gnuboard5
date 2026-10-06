@@ -10,19 +10,27 @@ function get_list_thumbnail($bo_table, $wr_id, $thumb_width, $thumb_height, $is_
     $filename = $alt = $data_path = '';
     $edt = false;
 
-    $row = get_thumbnail_find_cache($bo_table, $wr_id, 'file');
     $empty_array = array('src'=>'', 'ori'=>'', 'alt'=>'');
 
-    if(isset($row['bf_file']) && $row['bf_file']) {
+    $write = get_thumbnail_find_cache($bo_table, $wr_id, 'content');
+
+    // 비밀글이면 썸네일을 노출하지 않습니다.
+    if (isset($write['wr_option']) && strpos($write['wr_option'], "secret") !== false) {
+        return run_replace('is_secret_list_thumbnail', $empty_array, $bo_table, $write);
+    }
+
+    $row = get_thumbnail_find_cache($bo_table, $wr_id, 'file');
+
+    if (isset($row['bf_file']) && $row['bf_file']) {
         $filename = $row['bf_file'];
         $filepath = G5_DATA_PATH.'/file/'.$bo_table;
         $alt = get_text($row['bf_content']);
     } else {
-        $write = get_thumbnail_find_cache($bo_table, $wr_id, 'content');
         $edt = true;
         
         if( $matches = get_editor_image($write['wr_content'], false) ){
-            for($i=0; $i<count($matches[1]); $i++)
+            $matches_cnt = count($matches[1]);
+            for($i=0; $i<$matches_cnt; $i++)
             {
                 // 이미지 path 구함
                 $p = parse_url($matches[1][$i]);
@@ -110,7 +118,8 @@ function get_view_thumbnail($contents, $thumb_width=0)
 
     $extensions = array(1=>'gif', 2=>'jpg', 3=>'png', 18=>'webp');
 
-    for($i=0; $i<count($matches[1]); $i++) {
+    $matches_cnt = count($matches[1]);
+    for($i=0; $i<$matches_cnt; $i++) {
 
         $img = $matches[1][$i];
         $img_tag = isset($matches[0][$i]) ? $matches[0][$i] : '';
@@ -268,11 +277,10 @@ function thumbnail($filename, $source_path, $target_path, $thumb_width, $thumb_h
     $thumb_filename = preg_replace("/\.[^\.]+$/i", "", $filename); // 확장자제거
     // $thumb_file = "$target_path/thumb-{$thumb_filename}_{$thumb_width}x{$thumb_height}.".$ext[$size[2]];
     $thumb_file = "$target_path/thumb-{$thumb_filename}_{$thumb_width}x{$thumb_height}.".$file_ext;
-    
-    $thumb_time = @filemtime($thumb_file);
-    $source_time = @filemtime($source_file);
 
     if (file_exists($thumb_file)) {
+        $thumb_time = @filemtime($thumb_file);
+        $source_time = @filemtime($source_file);
         if ($is_create == false && $source_time < $thumb_time) {
             return basename($thumb_file);
         }

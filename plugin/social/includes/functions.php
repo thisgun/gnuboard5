@@ -151,7 +151,7 @@ function social_before_join_check($url=''){
     return false;
 }
 
-function social_get_data($by='provider', $provider, $user_profile){
+function social_get_data($by, $provider, $user_profile){
     global $g5;
 
     // 소셜 가입이 되어 있는지 체크
@@ -368,6 +368,7 @@ function social_escape_request($request){
 
 function social_get_request_provider(){
     $provider_name = isset($_REQUEST['provider']) ? ucfirst(social_escape_request($_REQUEST['provider'])) : '';
+    $provider_name = preg_replace('/[^a-z0-9_]/i', '', $provider_name); // 허용 문자만 유지
 
     return $provider_name;
 }
@@ -549,6 +550,18 @@ function social_check_login_before($p_service=''){
                 
                 if( $mylink ){
 
+                    // CSRF 토큰 검증 (popup.php에서 설정한 세션 토큰 확인)
+                    $mylink_token = get_session('ss_social_mylink_token');
+                    set_session('ss_social_mylink_token', '');
+                    if (!$mylink_token) {
+                        if ($use_popup == 1 || !$use_popup) {
+                            alert_close('올바른 방법으로 이용해 주십시오.');
+                        } else {
+                            alert('올바른 방법으로 이용해 주십시오.');
+                        }
+                        exit;
+                    }
+
                     social_user_profile_replace($member['mb_id'], $provider_name, $user_profile);
 
                     if( is_object( $adapter ) ){    //연결한것은 인증 받은 즉시 로그아웃한다.
@@ -581,6 +594,7 @@ function social_check_login_before($p_service=''){
                             $params = array('provider'=>$provider_name);
 
                             $url = replaceQueryParams($url, $params);
+                            check_url_host($url, '', G5_URL, true);
                             goto_url($url);
                         } else {
                             goto_url(G5_URL);
@@ -760,6 +774,7 @@ function social_member_comfirm_redirect(){
             $params = array('provider'=>$provider_name);
 
             $url = replaceQueryParams($url, $params);
+            check_url_host($url, '', G5_URL, true);
             goto_url($url);
 
         }

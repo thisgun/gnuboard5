@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS `g5_shop_cart` (
   `ct_direct` tinyint(4) NOT NULL DEFAULT '0',
   `ct_select` tinyint(4) NOT NULL DEFAULT '0',
   `ct_select_time` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+  `ct_complete_time` datetime DEFAULT NULL,
   PRIMARY KEY (`ct_id`),
   KEY `od_id` (`od_id`),
   KEY `it_id` (`it_id`),
@@ -169,6 +170,7 @@ CREATE TABLE IF NOT EXISTS `g5_shop_coupon_log` (
   `cp_price` int(11) NOT NULL DEFAULT '0',
   `cl_datetime` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
   PRIMARY KEY (`cl_id`),
+  UNIQUE KEY `idx_coupon_use` (`cp_id`, `mb_id`),
   KEY `mb_id` (`mb_id`),
   KEY `od_id` (`od_id`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;
@@ -209,6 +211,7 @@ CREATE TABLE IF NOT EXISTS `g5_shop_coupon_zone` (
 
 DROP TABLE IF EXISTS `g5_shop_default`;
 CREATE TABLE IF NOT EXISTS `g5_shop_default` (
+  `de_id` int(11) NOT NULL auto_increment,
   `de_admin_company_owner` varchar(255) NOT NULL DEFAULT '',
   `de_admin_company_name` varchar(255) NOT NULL DEFAULT '',
   `de_admin_company_saupja_no` varchar(255) NOT NULL DEFAULT '',
@@ -349,15 +352,26 @@ CREATE TABLE IF NOT EXISTS `g5_shop_default` (
   `de_kcp_mid` varchar(255) NOT NULL DEFAULT '',
   `de_kcp_site_key` varchar(255) NOT NULL DEFAULT '',
   `de_inicis_mid` varchar(255) NOT NULL DEFAULT '',
-  `de_inicis_admin_key` varchar(255) NOT NULL DEFAULT '',
+  `de_inicis_iniapi_key` varchar(30) NOT NULL DEFAULT '',
+  `de_inicis_iniapi_iv` varchar(30) NOT NULL DEFAULT '',
   `de_inicis_sign_key` varchar(255) NOT NULL DEFAULT '',
+  `de_inicis_pro_use` tinyint(4) NOT NULL DEFAULT '0',
+  `de_inicis_hash_key` varchar(255) NOT NULL DEFAULT '',
+  `de_inicis_pro_alert_use` tinyint(4) NOT NULL DEFAULT '1',
+  `de_inicis_pro_reconcile_use` tinyint(4) NOT NULL DEFAULT '0',
+  `de_inicis_pro_log_days` int(11) NOT NULL DEFAULT '365',
+  `de_inicis_pro_summary_days` int(11) NOT NULL DEFAULT '1825',
+  `de_inicis_pro_monitor_at` datetime DEFAULT NULL,
+  `de_inicis_pro_monitor_message` varchar(255) NOT NULL DEFAULT '',
   `de_iche_use` tinyint(4) NOT NULL DEFAULT '0',
   `de_easy_pay_use` tinyint(4) NOT NULL DEFAULT '0',
-  `de_easy_pay_services` varchar(255) NOT NULL DEFAULT '',
+  `de_easy_pay_services` varchar(1024) NOT NULL DEFAULT '',
   `de_samsung_pay_use` tinyint(4) NOT NULL DEFAULT '0',
   `de_inicis_lpay_use` tinyint(4) NOT NULL DEFAULT '0',
   `de_inicis_kakaopay_use` tinyint(4) NOT NULL DEFAULT '0',
   `de_inicis_cartpoint_use` tinyint(4) NOT NULL DEFAULT '0',
+  `de_nicepay_mid` varchar(30) NOT NULL DEFAULT '',
+  `de_nicepay_key` varchar(255) NOT NULL DEFAULT '',
   `de_item_use_use` tinyint(4) NOT NULL DEFAULT '0',
   `de_item_use_write` tinyint(4) NOT NULL DEFAULT '0',
   `de_code_dup_use` tinyint(4) NOT NULL DEFAULT '0',
@@ -371,11 +385,6 @@ CREATE TABLE IF NOT EXISTS `g5_shop_default` (
   `de_hp_use` tinyint(4) NOT NULL DEFAULT '0',
   `de_escrow_use` tinyint(4) NOT NULL DEFAULT '0',
   `de_tax_flag_use` tinyint(4) NOT NULL DEFAULT '0',
-  `de_kakaopay_mid` varchar(255) NOT NULL DEFAULT '',
-  `de_kakaopay_key` varchar(255) NOT NULL DEFAULT '',
-  `de_kakaopay_enckey` varchar(255) NOT NULL DEFAULT '',
-  `de_kakaopay_hashkey` varchar(255) NOT NULL DEFAULT '',
-  `de_kakaopay_cancelpwd` varchar(255) NOT NULL DEFAULT '',
   `de_naverpay_mid` varchar(255) NOT NULL DEFAULT '',
   `de_naverpay_cert_key` varchar(255) NOT NULL DEFAULT '',
   `de_naverpay_button_key` varchar(255) NOT NULL DEFAULT '',
@@ -385,7 +394,8 @@ CREATE TABLE IF NOT EXISTS `g5_shop_default` (
   `de_member_reg_coupon_use` tinyint(4) NOT NULL DEFAULT '0',
   `de_member_reg_coupon_term` int(11) NOT NULL DEFAULT '0',
   `de_member_reg_coupon_price` int(11) NOT NULL DEFAULT '0',
-  `de_member_reg_coupon_minimum` int(11) NOT NULL DEFAULT '0'
+  `de_member_reg_coupon_minimum` int(11) NOT NULL DEFAULT '0',
+  PRIMARY KEY  (`de_id`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 
 -- --------------------------------------------------------
@@ -571,6 +581,9 @@ CREATE TABLE IF NOT EXISTS `g5_shop_item_use` (
   `is_score` tinyint(4) NOT NULL DEFAULT '0',
   `is_subject` varchar(255) NOT NULL DEFAULT '',
   `is_content` text NOT NULL,
+  `is_reply_subject` varchar(255) NOT NULL DEFAULT '',
+  `is_reply_content` text NOT NULL,
+  `is_reply_name` varchar(25) NOT NULL DEFAULT '',
   `is_time` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
   `is_ip` varchar(25) NOT NULL DEFAULT '',
   `is_confirm` tinyint(4) NOT NULL DEFAULT '0',
@@ -670,6 +683,8 @@ CREATE TABLE IF NOT EXISTS `g5_shop_order` (
   `od_test` tinyint(4) NOT NULL DEFAULT '0',
   `od_mobile` tinyint(4) NOT NULL DEFAULT '0',
   `od_pg` varchar(255) NOT NULL DEFAULT '',
+  `od_kcp_site_cd` varchar(5) NOT NULL DEFAULT '',
+  `od_lg_mid` varchar(104) NOT NULL DEFAULT '',
   `od_tno` varchar(255) NOT NULL DEFAULT '',
   `od_app_no` varchar(20) NOT NULL DEFAULT '',
   `od_escrow` tinyint(4) NOT NULL DEFAULT '0',
@@ -768,6 +783,8 @@ CREATE TABLE IF NOT EXISTS `g5_shop_personalpay` (
   `pp_use` TINYINT(4) NOT NULL DEFAULT '0',
   `pp_price` INT(11) NOT NULL DEFAULT '0',
   `pp_pg` varchar(255) NOT NULL DEFAULT '',
+  `pp_kcp_site_cd` varchar(5) NOT NULL DEFAULT '',
+  `pp_lg_mid` varchar(104) NOT NULL DEFAULT '',
   `pp_tno` VARCHAR(255) NOT NULL DEFAULT '',
   `pp_app_no` VARCHAR(20) NOT NULL DEFAULT '',
   `pp_casseqno` VARCHAR(255) NOT NULL DEFAULT '',
@@ -881,4 +898,194 @@ CREATE TABLE IF NOT EXISTS `g5_shop_inicis_log` (
   `post_data` text NOT NULL,
   `is_mail_send` tinyint(4) NOT NULL DEFAULT '1',
   PRIMARY KEY (`oid`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `g5_shop_order_cancel_log`
+--
+
+DROP TABLE IF EXISTS `g5_shop_order_cancel_log`;
+CREATE TABLE IF NOT EXISTS `g5_shop_order_cancel_log` (
+  `cl_id` int(11) NOT NULL AUTO_INCREMENT,
+  `od_id` bigint(20) unsigned NOT NULL,
+  `mb_id` varchar(255) NOT NULL DEFAULT '',
+  `cl_pg` varchar(30) NOT NULL DEFAULT '',
+  `cl_pg_version` varchar(30) NOT NULL DEFAULT '',
+  `cl_settle_case` varchar(100) NOT NULL DEFAULT '',
+  `cl_test` tinyint(4) NOT NULL DEFAULT '0',
+  `cl_source` varchar(20) NOT NULL DEFAULT '',
+  `cl_type` varchar(20) NOT NULL DEFAULT '',
+  `cl_status` varchar(30) NOT NULL DEFAULT '',
+  `cl_origin_tno` varchar(255) NOT NULL DEFAULT '',
+  `cl_cancel_tno` varchar(255) NOT NULL DEFAULT '',
+  `cl_pg_order_no` varchar(100) NOT NULL DEFAULT '',
+  `cl_seq` int(11) NOT NULL DEFAULT '0',
+  `cl_pg_seq` varchar(20) NOT NULL DEFAULT '',
+  `cl_idempotency_key` char(32) NOT NULL DEFAULT '',
+  `cl_request_amount` int(11) NOT NULL DEFAULT '0',
+  `cl_approved_amount` int(11) NOT NULL DEFAULT '0',
+  `cl_remaining_amount` int(11) NOT NULL DEFAULT '0',
+  `cl_tax_mny` int(11) NOT NULL DEFAULT '0',
+  `cl_vat_mny` int(11) NOT NULL DEFAULT '0',
+  `cl_free_mny` int(11) NOT NULL DEFAULT '0',
+  `cl_refund_before` int(11) NOT NULL DEFAULT '0',
+  `cl_refund_after` int(11) NOT NULL DEFAULT '0',
+  `cl_result_code` varchar(50) NOT NULL DEFAULT '',
+  `cl_result_msg` varchar(255) NOT NULL DEFAULT '',
+  `cl_reason` varchar(255) NOT NULL DEFAULT '',
+  `cl_request_data` mediumtext NOT NULL,
+  `cl_response_data` mediumtext NOT NULL,
+  `cl_noti_data` mediumtext NOT NULL,
+  `cl_ip` varchar(45) NOT NULL DEFAULT '',
+  `cl_requested_at` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+  `cl_approved_at` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+  `cl_local_applied_at` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+  `cl_created_at` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+  `cl_updated_at` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+  PRIMARY KEY (`cl_id`),
+  KEY `od_id` (`od_id`),
+  KEY `cl_pg` (`cl_pg`),
+  KEY `cl_pg_version` (`cl_pg_version`),
+  KEY `cl_status` (`cl_status`),
+  KEY `cl_idempotency_key` (`cl_idempotency_key`),
+  KEY `cl_origin_tno` (`cl_origin_tno`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `g5_shop_inicis_pay`
+--
+
+DROP TABLE IF EXISTS `g5_shop_inicis_pay`;
+CREATE TABLE IF NOT EXISTS `g5_shop_inicis_pay` (
+  `ip_id` int(11) NOT NULL AUTO_INCREMENT,
+  `ip_oid` varchar(64) NOT NULL DEFAULT '',
+  `ip_tid` varchar(80) NOT NULL DEFAULT '',
+  `ip_auth_tid` varchar(80) NOT NULL DEFAULT '',
+  `ip_mid` varchar(80) NOT NULL DEFAULT '',
+  `ip_environment` varchar(10) NOT NULL DEFAULT '',
+  `mb_id` varchar(20) NOT NULL DEFAULT '',
+  `ip_amount` int(11) NOT NULL DEFAULT '0',
+  `ip_pay_type` varchar(20) NOT NULL DEFAULT '',
+  `ip_easy_pay` varchar(20) NOT NULL DEFAULT '',
+  `ip_device` varchar(10) NOT NULL DEFAULT '',
+  `ip_order_type` varchar(10) NOT NULL DEFAULT '',
+  `ip_status` varchar(30) NOT NULL DEFAULT '',
+  `ip_result_code` varchar(30) NOT NULL DEFAULT '',
+  `ip_result_message` varchar(255) NOT NULL DEFAULT '',
+  `ip_noti_status` varchar(30) NOT NULL DEFAULT '',
+  `ip_noti_code` varchar(30) NOT NULL DEFAULT '',
+  `ip_noti_message` varchar(255) NOT NULL DEFAULT '',
+  `ip_noti_failed_count` int(11) NOT NULL DEFAULT '0',
+  `ip_noti_at` datetime DEFAULT NULL,
+  `ip_cancel_status` varchar(30) NOT NULL DEFAULT '',
+  `ip_cancel_code` varchar(30) NOT NULL DEFAULT '',
+  `ip_cancel_message` varchar(255) NOT NULL DEFAULT '',
+  `ip_cancel_checked_at` datetime DEFAULT NULL,
+  `ip_refund_required` tinyint(4) NOT NULL DEFAULT '0',
+  `ip_vbank_due_at` datetime DEFAULT NULL,
+  `ip_expired_at` datetime DEFAULT NULL,
+  `ip_order_exists` tinyint(4) NOT NULL DEFAULT '0',
+  `ip_approved_at` datetime DEFAULT NULL,
+  `ip_ordered_at` datetime DEFAULT NULL,
+  `ip_notified_at` datetime DEFAULT NULL,
+  `ip_canceled_at` datetime DEFAULT NULL,
+  `ip_created_at` datetime DEFAULT NULL,
+  `ip_updated_at` datetime DEFAULT NULL,
+  `ip_ip` varchar(45) NOT NULL DEFAULT '',
+  `ip_event_count` int(11) NOT NULL DEFAULT '0',
+  `ip_audit_error` tinyint(4) NOT NULL DEFAULT '0',
+  `ip_alerted_at` datetime DEFAULT NULL,
+  `ip_alert_key` varchar(64) NOT NULL DEFAULT '',
+  `ip_pg_status` varchar(30) NOT NULL DEFAULT '',
+  `ip_pg_amount` int(11) NOT NULL DEFAULT '0',
+  `ip_pg_tid` varchar(80) NOT NULL DEFAULT '',
+  `ip_pg_result_code` varchar(30) NOT NULL DEFAULT '',
+  `ip_pg_message` varchar(255) NOT NULL DEFAULT '',
+  `ip_pg_checked_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`ip_id`),
+  UNIQUE KEY `ip_oid` (`ip_oid`),
+  KEY `ip_tid` (`ip_tid`),
+  KEY `ip_auth_tid` (`ip_auth_tid`),
+  KEY `ip_status` (`ip_status`),
+  KEY `ip_noti_status` (`ip_noti_status`),
+  KEY `ip_cancel_status` (`ip_cancel_status`),
+  KEY `ip_refund_required` (`ip_refund_required`),
+  KEY `ip_updated_at` (`ip_updated_at`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `g5_shop_inicis_pay_event`
+--
+
+DROP TABLE IF EXISTS `g5_shop_inicis_pay_event`;
+CREATE TABLE IF NOT EXISTS `g5_shop_inicis_pay_event` (
+  `pe_id` int(11) NOT NULL AUTO_INCREMENT,
+  `ip_oid` varchar(64) NOT NULL DEFAULT '',
+  `ip_tid` varchar(80) NOT NULL DEFAULT '',
+  `pe_stage` varchar(30) NOT NULL DEFAULT '',
+  `pe_status` varchar(30) NOT NULL DEFAULT '',
+  `pe_code` varchar(30) NOT NULL DEFAULT '',
+  `pe_message` varchar(255) NOT NULL DEFAULT '',
+  `pe_source` varchar(10) NOT NULL DEFAULT '',
+  `pe_ip` varchar(45) NOT NULL DEFAULT '',
+  `pe_created_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`pe_id`),
+  KEY `ip_oid` (`ip_oid`),
+  KEY `ip_tid` (`ip_tid`),
+  KEY `pe_status` (`pe_status`),
+  KEY `pe_created_at` (`pe_created_at`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+
+-- KCP 통보 처리 및 중간 실패 복구 이력
+CREATE TABLE `g5_shop_kcp_noti` (
+  `kn_key` char(64) NOT NULL,
+  `kn_trade` char(64) NOT NULL,
+  `kn_noti_id` varchar(20) NOT NULL,
+  `kn_op_cd` char(2) NOT NULL,
+  `kn_payload` char(64) NOT NULL,
+  `od_id` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `kn_plan` mediumtext NOT NULL,
+  `kn_done` tinyint(4) NOT NULL DEFAULT '0',
+  `kn_created_at` datetime NOT NULL,
+  PRIMARY KEY (`kn_key`),
+  KEY `kn_trade` (`kn_trade`),
+  KEY `od_id` (`od_id`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+
+CREATE TABLE `g5_shop_order_access` (
+  od_id bigint(20) unsigned NOT NULL,
+  token_hash char(64) NOT NULL DEFAULT '',
+  pg varchar(20) NOT NULL DEFAULT '',
+  cart_id bigint(20) unsigned NOT NULL DEFAULT '0',
+  status varchar(20) NOT NULL DEFAULT 'pending',
+  expires bigint(20) NOT NULL DEFAULT '0',
+  updated_at bigint(20) NOT NULL DEFAULT '0',
+  state_json mediumtext NOT NULL,
+  payment_key varchar(200) NOT NULL DEFAULT '',
+  response_json mediumtext NOT NULL,
+  PRIMARY KEY (od_id),
+  KEY cart_status (cart_id,status),
+  KEY state_expiry (status,expires)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+-- LG 입금 통보 및 중간 실패 복구 이력
+CREATE TABLE `g5_shop_lg_noti` (
+  `ln_key` char(64) NOT NULL,
+  `ln_trade` char(64) NOT NULL,
+  `ln_seq` int(11) NOT NULL,
+  `ln_flag` char(1) NOT NULL,
+  `ln_payload` char(64) NOT NULL,
+  `od_id` bigint(20) unsigned NOT NULL DEFAULT '0',
+  `ln_plan` mediumtext NOT NULL,
+  `ln_done` tinyint(4) NOT NULL DEFAULT '0',
+  `ln_created_at` datetime NOT NULL,
+  PRIMARY KEY (`ln_key`),
+  KEY `ln_trade` (`ln_trade`),
+  KEY `od_id` (`od_id`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;

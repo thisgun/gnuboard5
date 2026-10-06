@@ -2,18 +2,17 @@
 if (!defined('_GNUBOARD_')) exit; // 개별 페이지 접근 불가
 
 $useescrow = '';
+$inicis_pro_use = isset($default['de_inicis_pro_use']) && (int) $default['de_inicis_pro_use'] === 1;
 
 if ($default['de_card_test']) {
     if ($default['de_escrow_use'] == 1) {
         // 에스크로결제 테스트
         $default['de_inicis_mid'] = 'iniescrow0';
-        $default['de_inicis_admin_key'] = '1111';
         $default['de_inicis_sign_key'] = 'SU5JTElURV9UUklQTEVERVNfS0VZU1RS';
     }
     else {
         // 일반결제 테스트
         $default['de_inicis_mid'] = 'INIpayTest';
-        $default['de_inicis_admin_key'] = '1111';
         $default['de_inicis_sign_key'] = 'SU5JTElURV9UUklQTEVERVNfS0VZU1RS';
     }
 
@@ -41,24 +40,14 @@ else {
 /**************************
  * 1. 라이브러리 인클루드 *
  **************************/
-require_once(G5_SHOP_PATH.'/inicis/libs/INILib.php');
 require_once(G5_SHOP_PATH.'/inicis/libs/INIStdPayUtil.php');
 require_once(G5_SHOP_PATH.'/inicis/libs/sha256.inc.php');
+require_once(G5_SHOP_PATH.'/inicis/libs/inicis_youngcart_fn.php');
+if ($inicis_pro_use)
+    require_once(G5_SHOP_PATH.'/inicis/pro/inicis_pro.lib.php');
 
 $mid = $default['de_inicis_mid'];
 $signKey = $default['de_inicis_sign_key'];
-
-/***************************************
- * 2. INIpay50 클래스의 인스턴스 생성  *
- ***************************************/
-$inipay = new INIpay50;
-
-$inipay->SetField("inipayhome", G5_SHOP_PATH.'/inicis'); // 이니페이 홈디렉터리(상점수정 필요)
-$inipay->SetField("debug", "false");
-
-if( ! function_exists('mcrypt_encrypt')) {      // mcrypt 관련 함수가 없다면 취소시 openssl로 합니다.
-    $inipay->SetField("encMethod", "openssl");
-}
 
 $util = new INIStdPayUtil();
 
@@ -71,7 +60,7 @@ $cardQuotaBase = '2:3:4:5:6:7:8:9:10:11:12';  // 가맹점에서 사용할 할�
 
 $inicis_cardpoint = $default['de_inicis_cartpoint_use'] ? ':cardpoint' : '';   //신용카드 포인트 결제에 관한 옵션 ( 신청해야 함 )
 
-$acceptmethod = 'HPP(2):no_receipt:vbank('.date('Ymd', strtotime("+3 days", G5_SERVER_TIME)).'):below1000'.$useescrow.$inicis_cardpoint;
+$acceptmethod = 'HPP(2):no_receipt:vbank('.date('Ymd', strtotime("+3 days", G5_SERVER_TIME)).'):below1000:centerCd(Y)'.$useescrow.$inicis_cardpoint;
 
 /* 기타 */
 $siteDomain = G5_SHOP_URL.'/inicis'; //가맹점 도메인 입력

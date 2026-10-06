@@ -3,8 +3,11 @@ include_once('./_common.php');
 include_once(G5_SHOP_PATH.'/settle_inicis.inc.php');
 require_once(G5_SHOP_PATH.'/inicis/libs/HttpClient.php');
 require_once(G5_SHOP_PATH.'/inicis/libs/json_lib.php');
+require_once(G5_SHOP_PATH.'/inicis/libs/properties.php');
 
 $inicis_pay_result = false;
+
+$prop = new properties();
 
 try {
 
@@ -37,6 +40,18 @@ try {
         ///$mKey = $util->makeHash(signKey, "sha256"); // 가맹점 확인을 위한 signKey를 해시값으로 변경 (SHA-256방식 사용)
         $mKey = hash("sha256", $signKey);
 
+        //##########################################################################
+        // 승인요청 API url (authUrl) 리스트 는 properties 에 세팅하여 사용합니다.
+        // idc_name 으로 수신 받은 센터 네임을 properties 에서 include 하여 승인요청하시면 됩니다.
+        //##########################################################################
+        $idc_name = isset($_REQUEST["idc_name"]) && is_string($_REQUEST["idc_name"]) ? $_REQUEST["idc_name"] : "";
+        $authUrl    = $prop->getAuthUrl($idc_name);
+        
+        if ($authUrl === "" || !isset($_REQUEST["authUrl"]) || $authUrl !== $_REQUEST["authUrl"]) {
+            
+            die("authUrl check Fail\n");
+        }
+        
         //#####################
         // 2.signature 생성
         //#####################
@@ -52,6 +67,7 @@ try {
         $authMap['mid'] = $mid;   // 필수
         $authMap['authToken'] = $authToken; // 필수
         $authMap['signature'] = $signature; // 필수
+        $authMap['verification'] = hash('sha256', 'authToken='.$authToken.'&signKey='.$signKey.'&timestamp='.$timestamp);
         $authMap['timestamp'] = $timestamp; // 필수
         $authMap['charset'] = $charset;  // default=UTF-8
         $authMap['format'] = $format;  // default=XML
@@ -172,22 +188,28 @@ try {
             //#####################
 
             $netcancelResultString = ""; // 망취소 요청 API url(고정, 임의 세팅 금지)
-            if ($httpUtil->processHTTP($netCancel, $authMap)) {
-                $netcancelResultString = $httpUtil->body;
-            } else {
-                echo "Http Connect Error\n";
-                echo $httpUtil->errormsg;
+            $netCancel    = $prop->getNetCancel($idc_name);
+            
+            if ($netCancel !== "" && isset($_REQUEST["netCancelUrl"]) && $netCancel === $_REQUEST["netCancelUrl"]) {
+                
+                if ($httpUtil->processHTTP($netCancel, $authMap)) {
+                    $netcancelResultString = $httpUtil->body;
+                } else {
+                    echo "Http Connect Error\n";
+                    echo $httpUtil->errormsg;
 
-                throw new Exception("Http Connect Error");
+                    throw new Exception("Http Connect Error");
+                }
+
+                echo "<br/>## 망취소 API 결과 ##<br/>";
+                
+                /*##XML output##*/
+                //$netcancelResultString = str_replace("<", "&lt;", $$netcancelResultString);
+                //$netcancelResultString = str_replace(">", "&gt;", $$netcancelResultString);
+
+                // 취소 결과 확인
+                echo "<p>". $netcancelResultString . "</p>";
             }
-
-            echo "## 망취소 API 결과 ##";
-
-            $netcancelResultString = str_replace("<", "&lt;", $$netcancelResultString);
-            $netcancelResultString = str_replace(">", "&gt;", $$netcancelResultString);
-
-            echo "<pre>", $netcancelResultString . "</pre>";
-            // 취소 결과 확인
         }
     } else {
 

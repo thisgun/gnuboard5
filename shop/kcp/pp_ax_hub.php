@@ -146,7 +146,22 @@ if ( $req_tx == "pay" )
 {
         /* 1004원은 실제로 업체에서 결제하셔야 될 원 금액을 넣어주셔야 합니다. 결제금액 유효성 검증 */
         $c_PayPlus->mf_set_ordr_data( "ordr_mony",  $good_mny );
-        
+
+        $kcp_pay_type = '';   // 결제수단 검증 파라미터 pay_type (신용카드 : PACA, 계좌이체 : PABK, 가상계좌 : PAVC, 휴대폰 : PAMC)
+
+        if ($use_pay_method == "100000000000" && (in_array($od_settle_case, array('신용카드', '간편결제')))) {  // 신용카드
+            $kcp_pay_type = 'PACA';
+        } else if ($use_pay_method == "010000000000" && $od_settle_case === '계좌이체') {   // 계좌이체
+            $kcp_pay_type = 'PABK';
+        } else if ($use_pay_method == "001000000000" && $od_settle_case === '가상계좌') {   // 가상계좌
+            $kcp_pay_type = 'PAVC';
+        } else if ($use_pay_method == "000010000000" && $od_settle_case === '휴대폰') {   // 휴대폰
+            $kcp_pay_type = 'PAMC';
+        }
+
+        $c_PayPlus->mf_set_ordr_data( "pay_type",  $kcp_pay_type );
+        $c_PayPlus->mf_set_ordr_data( "ordr_no",  $ordr_idxx );
+
         $post_enc_data = isset($_POST['enc_data']) ? $_POST['enc_data'] : '';
         $post_enc_info = isset($_POST['enc_info']) ? $_POST['enc_info'] : '';
 
@@ -228,7 +243,8 @@ else
     $c_PayPlus->m_res_msg = "연동 오류|Payplus Plugin이 설치되지 않았거나 tran_cd값이 설정되지 않았습니다.";
 }
 
-if ($res_cd != '0000')
+// 가상계좌 발급 정상 응답은 V000 으로 옴 (KCP 정책 변경)
+if ($res_cd != '0000' && $res_cd != 'V000')
 {
     $res_msg = iconv("euc-kr", "utf-8", $res_msg);
 
@@ -252,7 +268,7 @@ if ($res_cd != '0000')
 /* = -------------------------------------------------------------------------- = */
 if ( $req_tx == "pay" )
 {
-    if( $res_cd == "0000" )
+    if( $res_cd == "0000" || $res_cd == "V000" )
     {
         $tno       = $c_PayPlus->mf_get_res_data( "tno"       ); // KCP 거래 고유 번호
         $amount    = $c_PayPlus->mf_get_res_data( "amount"    ); // KCP 실제 거래 금액
@@ -278,11 +294,14 @@ if ( $req_tx == "pay" )
 
             $kcp_pay_method = $c_PayPlus->mf_get_res_data( "pay_method" ); // 카카오페이 결제수단
             // 카드 코드는 PACA, 카카오머니 코드는 PAKM
-
+            // https://developer.kcp.co.kr/page/document/directpay
+            
             if( $kcp_pay_method == "PAKM" ){    // 카카오머니
                 $card_mny = $kakaomny_mny = $c_PayPlus->mf_get_res_data( "kakaomny_mny" );
                 $app_time = $app_kakaomny_time = $c_PayPlus->mf_get_res_data( "app_kakaomny_time" );
                 $od_other_pay_type = 'NHNKCP_KAKAOMONEY';
+            } else if( $kcp_pay_method == "PANP" ){    // 네이버페이머니
+                $od_other_pay_type = 'NHNKCP_NAVERMONEY';
             }
 
             /* = -------------------------------------------------------------- = */

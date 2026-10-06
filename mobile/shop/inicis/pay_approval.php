@@ -8,12 +8,15 @@ set_session('P_AMT',  '');
 set_session('P_HASH', '');
 
 $oid  = isset($_REQUEST['P_NOTI']) ? trim($_REQUEST['P_NOTI']) : '';
-$p_req_url = isset($_REQUEST['P_REQ_URL']) ? is_inicis_url_return(trim($_REQUEST['P_REQ_URL'])) : '';
+require_once(G5_SHOP_PATH.'/inicis/libs/properties.php');
+$prop = new properties();
+$idc_name = isset($_REQUEST['idc_name']) && is_string($_REQUEST['idc_name']) ? $_REQUEST['idc_name'] : '';
+$p_req_url = $prop->getMobileAuthUrl($idc_name);
 $p_status = isset($_REQUEST['P_STATUS']) ? trim($_REQUEST['P_STATUS']) : '';
 $p_tid = isset($_REQUEST['P_TID']) ? trim($_REQUEST['P_TID']) : '';
 $p_rmesg1 = isset($_REQUEST['P_RMESG1']) ? trim($_REQUEST['P_RMESG1']) : '';
 
-if( ! $p_req_url || !preg_match('/^https\:\/\//i', $p_req_url)){
+if ($p_req_url === '' || !isset($_REQUEST['P_REQ_URL']) || $p_req_url !== $_REQUEST['P_REQ_URL']) {
     alert("잘못된 요청 URL 입니다.");
 }
 
@@ -39,6 +42,11 @@ if(isset($data['pp_id']) && $data['pp_id']) {
 
     if (get_cart_count($tmp_cart_id) == 0)// 장바구니에 담기
         alert('세션을 잃거나 다른 브라우저에서 데이터가 변경된 경우입니다. 장바구니 상태를 확인후에 다시 시도해 주세요.', G5_SHOP_URL.'/cart.php');
+
+    // KVE-2026-2345: PG 승인 요청 전에 상품·옵션 구성과 금액을 확인한다.
+    $cart_validation_error = shop_validate_order_cart($tmp_cart_id);
+    if ($cart_validation_error !== '')
+        alert($cart_validation_error, G5_SHOP_URL.'/cart.php');
 
     $error = "";
     // 장바구니 상품 재고 검사
@@ -132,10 +140,10 @@ if(isset($data['pp_id']) && !empty($data['pp_id'])) {
         }
 
         $good_mny = isset($PAY['P_AMT']) ? $PAY['P_AMT'] : 0;
-        $pp_name = clean_xss_tags($data['pp_name']);
-        $pp_email = clean_xss_tags($data['pp_email']);
-        $pp_hp = clean_xss_tags($data['pp_hp']);
-        $pp_settle_case = clean_xss_tags($data['pp_settle_case']);
+        $pp_name = addslashes(clean_xss_tags($data['pp_name']));
+        $pp_email = addslashes(clean_xss_tags($data['pp_email']));
+        $pp_hp = addslashes(clean_xss_tags($data['pp_hp']));
+        $pp_settle_case = addslashes(clean_xss_tags($data['pp_settle_case']));
 
         $_POST['P_HASH'] = $hash;
         $_POST['P_AUTH_NO'] = isset($PAY['P_AUTH_NO']) ? $PAY['P_AUTH_NO'] : '';

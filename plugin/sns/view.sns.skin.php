@@ -25,14 +25,20 @@ $bo_v_sns_class = $config['cf_kakao_js_apikey'] ? 'show_kakao' : '';
 
 <?php if($config['cf_kakao_js_apikey']) { ?>
 <script src="//developers.kakao.com/sdk/js/kakao.min.js" async charset="utf-8"></script>
-<script src="<?php echo G5_JS_URL; ?>/kakaolink.js" charset="utf-8"></script>
+<script src="<?php echo get_versioned_asset_url(G5_JS_URL.'/kakaolink.js'); ?>" charset="utf-8"></script>
 <script type='text/javascript'>
     //<![CDATA[
-        // 사용할 앱의 Javascript 키를 설정해 주세요.
-        Kakao.init("<?php echo $config['cf_kakao_js_apikey']; ?>");
+        var kakao_javascript_apikey = "<?php echo $config['cf_kakao_js_apikey']; ?>";
 
         function Kakao_sendLink() {
-            var webUrl = location.protocol+"<?php echo '//'.$_SERVER['HTTP_HOST'].$_SERVER['REQUEST_URI']; ?>",
+
+            if (window.Kakao && (kakao_javascript_apikey !== undefined)) {
+                if (! Kakao.isInitialized()) {
+                    Kakao.init(kakao_javascript_apikey);
+                }
+            }
+
+            var webUrl = location.protocol+<?php echo json_encode('//'.$_SERVER['HTTP_HOST'].$_SERVER['REQUEST_URI']); ?>,
                 imageUrl = $("#bo_v_img").find("img").attr("src") || $(".view_image").find("img").attr("src") || '';
 
             Kakao.Link.sendDefault({

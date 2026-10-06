@@ -13,8 +13,6 @@ if ($config['cf_sms_use'] && $config['cf_icode_id'] && $config['cf_icode_pw']) {
     $userinfo = get_icode_userinfo($config['cf_icode_id'], $config['cf_icode_pw']);
 }
 
-check_log_folder(G5_SHOP_PATH.'/inicis/key', false);
-
 $g5['title'] = '쇼핑몰설정';
 include_once (G5_ADMIN_PATH.'/admin.head.php');
 
@@ -29,187 +27,18 @@ $pg_anchor = '<ul class="anchor">
 <li><a href="#anc_scf_sms">SMS설정</a></li>
 </ul>';
 
-// 무이자 할부 사용설정 필드 추가
-if(!isset($default['de_card_noint_use'])) {
-    sql_query(" ALTER TABLE `{$g5['g5_shop_default_table']}`
-                    ADD `de_card_noint_use` tinyint(4) NOT NULL DEFAULT '0' AFTER `de_card_use` ", true);
-}
-
-// 모바일 관련상품 설정 필드추가
-if(!isset($default['de_mobile_rel_list_use'])) {
-    sql_query(" ALTER TABLE `{$g5['g5_shop_default_table']}`
-                    ADD `de_mobile_rel_list_use` tinyint(4) NOT NULL DEFAULT '0' AFTER `de_rel_img_height`,
-                    ADD `de_mobile_rel_list_skin` varchar(255) NOT NULL DEFAULT '' AFTER `de_mobile_rel_list_use`,
-                    ADD `de_mobile_rel_img_width` int(11) NOT NULL DEFAULT '0' AFTER `de_mobile_rel_list_skin`,
-                    ADD `de_mobile_rel_img_height` int(11) NOT NULL DEFAULT ' 0' AFTER `de_mobile_rel_img_width`", true);
-}
-
-// 신규회원 쿠폰 설정 필드 추가
-if(!isset($default['de_member_reg_coupon_use'])) {
-    sql_query(" ALTER TABLE `{$g5['g5_shop_default_table']}`
-                    ADD `de_member_reg_coupon_use` tinyint(4) NOT NULL DEFAULT '0' AFTER `de_tax_flag_use`,
-                    ADD `de_member_reg_coupon_term` int(11) NOT NULL DEFAULT '0' AFTER `de_member_reg_coupon_use`,
-                    ADD `de_member_reg_coupon_price` int(11) NOT NULL DEFAULT '0' AFTER `de_member_reg_coupon_term` ", true);
-}
-
-// 신규회원 쿠폰 주문 최소금액 필드추가
-if(!isset($default['de_member_reg_coupon_minimum'])) {
-    sql_query(" ALTER TABLE `{$g5['g5_shop_default_table']}`
-                    ADD `de_member_reg_coupon_minimum` int(11) NOT NULL DEFAULT '0' AFTER `de_member_reg_coupon_price` ", true);
-}
-
-// lg 결제관련 필드 추가
-if(!isset($default['de_pg_service'])) {
-    sql_query(" ALTER TABLE `{$g5['g5_shop_default_table']}`
-                    ADD `de_pg_service` varchar(255) NOT NULL DEFAULT '' AFTER `de_sms_hp` ", true);
-}
-
-
-// inicis 필드 추가
-if(!isset($default['de_inicis_mid'])) {
-    sql_query(" ALTER TABLE `{$g5['g5_shop_default_table']}`
-                    ADD `de_inicis_mid` varchar(255) NOT NULL DEFAULT '' AFTER `de_kcp_site_key`,
-                    ADD `de_inicis_admin_key` varchar(255) NOT NULL DEFAULT '' AFTER `de_inicis_mid` ", true);
-}
-
-// 모바일 초기화면 이미지 줄 수 필드 추가
-if(!isset($default['de_mobile_type1_list_row'])) {
-    sql_query(" ALTER TABLE `{$g5['g5_shop_default_table']}`
-                    ADD `de_mobile_type1_list_row` int(11) NOT NULL DEFAULT '0' AFTER `de_mobile_type1_list_mod`,
-                    ADD `de_mobile_type2_list_row` int(11) NOT NULL DEFAULT '0' AFTER `de_mobile_type2_list_mod`,
-                    ADD `de_mobile_type3_list_row` int(11) NOT NULL DEFAULT '0' AFTER `de_mobile_type3_list_mod`,
-                    ADD `de_mobile_type4_list_row` int(11) NOT NULL DEFAULT '0' AFTER `de_mobile_type4_list_mod`,
-                    ADD `de_mobile_type5_list_row` int(11) NOT NULL DEFAULT '0' AFTER `de_mobile_type5_list_mod` ", true);
-}
-
-// 모바일 관련상품 이미지 줄 수 필드 추가
-if(!isset($default['de_mobile_rel_list_mod'])) {
-    sql_query(" ALTER TABLE `{$g5['g5_shop_default_table']}`
-                    ADD `de_mobile_rel_list_mod` int(11) NOT NULL DEFAULT '0' AFTER `de_mobile_rel_list_skin` ", true);
-}
-
-// 모바일 검색상품 이미지 줄 수 필드 추가
-if(!isset($default['de_mobile_search_list_row'])) {
-    sql_query(" ALTER TABLE `{$g5['g5_shop_default_table']}`
-                    ADD `de_mobile_search_list_row` int(11) NOT NULL DEFAULT '0' AFTER `de_mobile_search_list_mod` ", true);
-}
-
-// PG 간펼결제 사용여부 필드 추가
-if(!isset($default['de_easy_pay_use'])) {
-    sql_query(" ALTER TABLE `{$g5['g5_shop_default_table']}`
-                    ADD `de_easy_pay_use` tinyint(4) NOT NULL DEFAULT '0' AFTER `de_iche_use` ", true);
-}
-
-// 이니시스 삼성페이 사용여부 필드 추가
-if(!isset($default['de_samsung_pay_use'])) {
-    sql_query(" ALTER TABLE `{$g5['g5_shop_default_table']}`
-                    ADD `de_samsung_pay_use` tinyint(4) NOT NULL DEFAULT '0' AFTER `de_easy_pay_use` ", true);
-}
-
-// 이니시스
-if(!isset($default['de_inicis_cartpoint_use'])) {
-    sql_query(" ALTER TABLE `{$g5['g5_shop_default_table']}`
-                    ADD `de_inicis_cartpoint_use` tinyint(4) NOT NULL DEFAULT '0' AFTER `de_samsung_pay_use` ", true);
-}
-
-// 이니시스 lpay 사용여부 필드 추가
-if(!isset($default['de_inicis_lpay_use'])) {
-    sql_query(" ALTER TABLE `{$g5['g5_shop_default_table']}`
-                    ADD `de_inicis_lpay_use` tinyint(4) NOT NULL DEFAULT '0' AFTER `de_samsung_pay_use` ", true);
-}
-
-// 이니시스 kakaopay 사용여부 필드 추가
-if(!isset($default['de_inicis_kakaopay_use'])) {
-    sql_query(" ALTER TABLE `{$g5['g5_shop_default_table']}`
-                    ADD `de_inicis_kakaopay_use` tinyint(4) NOT NULL DEFAULT '0' AFTER `de_inicis_lpay_use` ", true);
-}
-
-// 카카오페이 필드 추가
-if(!isset($default['de_kakaopay_mid'])) {
-    sql_query(" ALTER TABLE `{$g5['g5_shop_default_table']}`
-                    ADD `de_kakaopay_mid` varchar(255) NOT NULL DEFAULT '' AFTER `de_tax_flag_use`,
-                    ADD `de_kakaopay_key` varchar(255) NOT NULL DEFAULT '' AFTER `de_kakaopay_mid`,
-                    ADD `de_kakaopay_enckey` varchar(255) NOT NULL DEFAULT '' AFTER `de_kakaopay_key`,
-                    ADD `de_kakaopay_hashkey` varchar(255) NOT NULL DEFAULT '' AFTER `de_kakaopay_enckey`,
-                    ADD `de_kakaopay_cancelpwd` varchar(255) NOT NULL DEFAULT '' AFTER `de_kakaopay_hashkey` ", true);
-}
-
-// 이니시스 웹결제 사인키 필드 추가
-if(!isset($default['de_inicis_sign_key'])) {
-    sql_query(" ALTER TABLE `{$g5['g5_shop_default_table']}`
-                    ADD `de_inicis_sign_key` varchar(255) NOT NULL DEFAULT '' AFTER `de_inicis_admin_key` ", true);
-}
-
-// 네이버페이 필드추가
-if(!isset($default['de_naverpay_mid'])) {
-    sql_query(" ALTER TABLE `{$g5['g5_shop_default_table']}`
-                    ADD `de_naverpay_mid` varchar(255) NOT NULL DEFAULT '' AFTER `de_kakaopay_cancelpwd`,
-                    ADD `de_naverpay_cert_key` varchar(255) NOT NULL DEFAULT '' AFTER `de_naverpay_mid`,
-                    ADD `de_naverpay_button_key` varchar(255) NOT NULL DEFAULT '' AFTER `de_naverpay_cert_key`,
-                    ADD `de_naverpay_test` tinyint(4) NOT NULL DEFAULT '0' AFTER `de_naverpay_button_key`,
-                    ADD `de_naverpay_mb_id` varchar(255) NOT NULL DEFAULT '' AFTER `de_naverpay_test`,
-                    ADD `de_naverpay_sendcost` varchar(255) NOT NULL DEFAULT '' AFTER `de_naverpay_mb_id`", true);
-}
-
-// 유형별상품리스트 설정필드 추가
-if(!isset($default['de_listtype_list_skin'])) {
-    sql_query(" ALTER TABLE `{$g5['g5_shop_default_table']}`
-                    ADD `de_listtype_list_skin` varchar(255) NOT NULL DEFAULT '' AFTER `de_mobile_search_img_height`,
-                    ADD `de_listtype_list_mod` int(11) NOT NULL DEFAULT '0' AFTER `de_listtype_list_skin`,
-                    ADD `de_listtype_list_row` int(11) NOT NULL DEFAULT '0' AFTER `de_listtype_list_mod`,
-                    ADD `de_listtype_img_width` int(11) NOT NULL DEFAULT '0' AFTER `de_listtype_list_row`,
-                    ADD `de_listtype_img_height` int(11) NOT NULL DEFAULT '0' AFTER `de_listtype_img_width`,
-                    ADD `de_mobile_listtype_list_skin` varchar(255) NOT NULL DEFAULT '' AFTER `de_listtype_img_height`,
-                    ADD `de_mobile_listtype_list_mod` int(11) NOT NULL DEFAULT '0' AFTER `de_mobile_listtype_list_skin`,
-                    ADD `de_mobile_listtype_list_row` int(11) NOT NULL DEFAULT '0' AFTER `de_mobile_listtype_list_mod`,
-                    ADD `de_mobile_listtype_img_width` int(11) NOT NULL DEFAULT '0' AFTER `de_mobile_listtype_list_row`,
-                    ADD `de_mobile_listtype_img_height` int(11) NOT NULL DEFAULT '0' AFTER `de_mobile_listtype_img_width` ", true);
-}
-
-// 임시저장 테이블이 없을 경우 생성
-if(!sql_query(" DESC {$g5['g5_shop_post_log_table']} ", false)) {
-    sql_query(" CREATE TABLE IF NOT EXISTS `{$g5['g5_shop_post_log_table']}` (
-                  `log_id` int(11) NOT NULL AUTO_INCREMENT,   
-                  `oid` bigint(20) unsigned NOT NULL,
-                  `mb_id` varchar(255) NOT NULL DEFAULT '',
-                  `post_data` text NOT NULL,
-                  `ol_code` varchar(255) NOT NULL DEFAULT '',
-                  `ol_msg` text NOT NULL,
-                  `ol_datetime` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
-                  `ol_ip` varchar(25) NOT NULL DEFAULT '',
-                  PRIMARY KEY (`log_id`)
-                ) ENGINE=MyISAM DEFAULT CHARSET=utf8; ", false);
-}
-
-
-// 현금영수증 발급 조건 추가
-if(!isset($default['de_taxsave_types'])) {
-    sql_query(" ALTER TABLE `{$g5['g5_shop_default_table']}`
-                    ADD `de_taxsave_types` set('account','vbank','transfer') NOT NULL DEFAULT 'account' AFTER `de_taxsave_use` ", true);
-}
-
-// 아이코드 토큰키 추가
-if( ! isset($config['cf_icode_token_key']) ){
-    $sql = "ALTER TABLE `{$g5['config_table']}` 
-            ADD COLUMN `cf_icode_token_key` VARCHAR(100) NOT NULL DEFAULT '' AFTER `cf_icode_server_port`; ";
-    sql_query($sql, false);
-}
-
-// PG 간편결제 추가 ( NHN_KCP 네이버페이, 카카오페이 )
-if( ! isset($default['de_easy_pay_services']) ){
-    $sql = "ALTER TABLE `{$g5['g5_shop_default_table']}` 
-            ADD COLUMN `de_easy_pay_services` VARCHAR(255) NOT NULL DEFAULT '' AFTER `de_easy_pay_use`; ";
-    sql_query($sql, false);
-}
-
 if( function_exists('pg_setting_check') ){
     pg_setting_check(true);
 }
 
-if(!$default['de_kakaopay_cancelpwd']){
-    $default['de_kakaopay_cancelpwd'] = '1111';
-}
 ?>
+
+<?php if (!empty($default['de_kakaopay_mid']) || !empty($default['de_kakaopay_enckey'])) { ?>
+<div class="local_desc01 local_desc">
+    <p>5.6.37부터 SIRK 전용 카카오페이 연동을 지원하지 않습니다. 기존 거래는 이니시스 상점관리자에서 승인·취소 내역을 확인해 주십시오.</p>
+    <p>기존 이용 고객 지원: 김민섭 <a href="mailto:minsup@sir.kr">minsup@sir.kr</a></p>
+</div>
+<?php } ?>
 
 <form name="fconfig" action="./configformupdate.php" onsubmit="return fconfig_check(this)" method="post" enctype="MULTIPART/FORM-DATA">
 <input type="hidden" name="token" value="">
@@ -619,14 +448,26 @@ if(!$default['de_kakaopay_cancelpwd']){
         <tr id="kcp_vbank_url" class="pg_vbank_url">
             <th scope="row">NHN KCP 가상계좌<br>입금통보 URL</th>
             <td>
-                <?php echo help("NHN KCP 가상계좌 사용시 다음 주소를 <strong><a href=\"http://admin.kcp.co.kr\" target=\"_blank\">NHN KCP 관리자</a> &gt; 상점정보관리 &gt; 정보변경 &gt; 공통URL 정보 &gt; 공통URL 변경후</strong>에 넣으셔야 상점에 자동으로 입금 통보됩니다."); ?>
+                <?php echo help("NHN KCP 가상계좌 사용시 다음 주소를 <strong><a href=\"https://partner.kcp.co.kr\" target=\"_blank\">NHN KCP 관리자</a> &gt; 상점정보관리 &gt; 정보변경 &gt; 공통URL 정보 &gt; 공통URL 변경후</strong>에 넣으셔야 상점에 자동으로 입금 통보됩니다."); ?>
                 <?php echo G5_SHOP_URL; ?>/settle_kcp_common.php</td>
         </tr>
         <tr id="inicis_vbank_url" class="pg_vbank_url">
-            <th scope="row">KG이니시스 가상계좌 입금통보 URL</th>
+            <th scope="row">KG이니시스 가상계좌<br>입금통보 URL</th>
             <td>
                 <?php echo help("KG이니시스 가상계좌 사용시 다음 주소를 <strong><a href=\"https://iniweb.inicis.com/\" target=\"_blank\">KG이니시스 관리자</a> &gt; 거래내역 &gt; 가상계좌 &gt; 입금통보방식선택 &gt; URL 수신 설정</strong>에 넣으셔야 상점에 자동으로 입금 통보됩니다."); ?>
                 <?php echo G5_SHOP_URL; ?>/settle_inicis_common.php</td>
+        </tr>
+        <tr id="nicepay_vbank_url" class="pg_vbank_url">
+            <th scope="row">NICEPAY 가상계좌<br>입금통보 URL</th>
+            <td>
+                <?php echo help("NICEPAY 가상계좌 사용시 다음 주소를 <strong><a href=\"https://npg.nicepay.co.kr/\" target=\"_blank\">NICEPAY 관리자</a> &gt; 가맹점관리자페이지 설정 (메인화면 → 가맹점정보 클릭)</strong>에 넣으셔야 상점에 자동으로 입금 통보됩니다."); ?>
+                <?php echo G5_SHOP_URL; ?>/settle_nicepay_common.php</td>
+        </tr>
+        <tr id="toss_vbank_url" class="pg_vbank_url">
+            <th scope="row">토스페이먼츠 가상계좌<br>입금통보 URL</th>
+            <td>
+                <?php echo help("토스페이먼츠 가상계좌 사용시 다음 주소를 <strong><a href=\"https://app.tosspayments.com/\" target=\"_blank\">토스페이먼츠 상점관리자</a> &gt; 개발자센터 &gt; 웹훅 &gt; 웹훅 등록하기에 URL</strong>에 넣으시고, <strong>구독할 이벤트를 [DEPOSIT_CALLBACK]</strong>을 선택하셔야 상점에 자동으로 입금 통보됩니다."); ?>
+                <?php echo G5_SHOP_URL; ?>/settle_toss_common.php</td>
         </tr>
         <tr>
             <th scope="row"><label for="de_hp_use">휴대폰결제사용</label></th>
@@ -661,13 +502,14 @@ if(!$default['de_kakaopay_cancelpwd']){
         <tr>
             <th scope="row"><label for="de_easy_pay_use">PG사 간편결제 버튼 사용</label></th>
             <td>
-                <?php echo help("주문서 작성 페이지에 PG사 간편결제(PAYCO, PAYNOW, KPAY) 버튼의 별도 사용 여부를 설정합니다.", 50); ?>
+                <?php echo help("주문서에 선택한 PG사의 사용 설정된 간편결제 수단을 개별 표시합니다. 아래 PG별 항목에서 계약된 수단을 선택하세요.", 50); ?>
                 <select id="de_easy_pay_use" name="de_easy_pay_use">
                     <option value="0" <?php echo get_selected($default['de_easy_pay_use'], 0); ?>>노출안함</option>
                     <option value="1" <?php echo get_selected($default['de_easy_pay_use'], 1); ?>>노출함</option>
                 </select>
             </td>
         </tr>
+
         <tr>
             <th scope="row"><label for="de_taxsave_use">현금영수증<br>발급사용</label></th>
             <td>
@@ -681,13 +523,13 @@ if(!$default['de_kakaopay_cancelpwd']){
         <?php
         $account_checked = $vbank_checked = $transfer_checked = '';
 
-        if (strstr($default['de_taxsave_types'], 'account')) {
+        if (strpos($default['de_taxsave_types'], 'account') !== false) {
             $account_checked = 'checked="checked"';
         }
-        if (strstr($default['de_taxsave_types'], 'vbank')) {
+        if (strpos($default['de_taxsave_types'], 'vbank') !== false) {
             $vbank_checked = 'checked="checked"';
         }
-        if (strstr($default['de_taxsave_types'], 'transfer')) {
+        if (strpos($default['de_taxsave_types'], 'transfer') !== false) {
             $transfer_checked = 'checked="checked"';
         }
         ?>
@@ -745,8 +587,8 @@ if(!$default['de_kakaopay_cancelpwd']){
         <tr>
             <th scope="row"><label for="de_point_days">주문완료 포인트</label></th>
             <td>
-                <?php echo help("주문자가 회원일 경우에만 주문완료시 포인트를 지급합니다. 주문취소, 반품 등을 고려하여 포인트를 지급할 적당한 기간을 입력하십시오. (기본값은 7일)\n0일로 설정하는 경우에는 주문완료와 동시에 포인트를 지급합니다."); ?>
-                주문 완료 <input type="text" name="de_point_days" value="<?php echo get_sanitize_input($default['de_point_days']); ?>" id="de_point_days" class="frm_input" size="2"> 일 이후에 포인트를 지급
+                <?php echo help("주문자가 회원일 경우에만 상품별 배송완료 시각부터 설정한 기간이 지난 후 포인트를 지급합니다. 주문취소, 반품 등을 고려하여 포인트를 지급할 적당한 기간을 입력하십시오. (기본값은 7일)\n0일로 설정하면 배송완료 처리 시 지급합니다. 그 외에는 기간 경과 후 관리자 주문 상세 조회 또는 완료 처리 시 지급합니다."); ?>
+                배송 완료 <input type="text" name="de_point_days" value="<?php echo get_sanitize_input($default['de_point_days']); ?>" id="de_point_days" class="frm_input" size="2"> 일 이후에 포인트를 지급
             </td>
         </tr>
         <tr>
@@ -756,8 +598,10 @@ if(!$default['de_kakaopay_cancelpwd']){
                 <?php echo help('쇼핑몰에서 사용할 결제대행사를 선택합니다.'); ?>
                 <ul class="de_pg_tab">
                     <li class="<?php if($default['de_pg_service'] == 'kcp') echo 'tab-current'; ?>"><a href="#kcp_info_anchor" data-value="kcp" title="NHN KCP 선택하기" >NHN KCP</a></li>
-                    <li class="<?php if($default['de_pg_service'] == 'lg') echo 'tab-current'; ?>"><a href="#lg_info_anchor" data-value="lg" title="토스페이먼츠 선택하기">토스페이먼츠</a></li>
+                    <li class="<?php if($default['de_pg_service'] == 'lg') echo 'tab-current'; ?>"><a href="#lg_info_anchor" data-value="lg" title="토스페이먼츠(구버전) 선택하기">토스페이먼츠(구버전)</a></li>
+                    <li class="<?php if($default['de_pg_service'] == 'toss') echo 'tab-current'; ?>"><a href="#lg_info_anchor" data-value="toss" title="토스페이먼츠 선택하기">토스페이먼츠</a></li>
                     <li class="<?php if($default['de_pg_service'] == 'inicis') echo 'tab-current'; ?>"><a href="#inicis_info_anchor" data-value="inicis" title="KG이니시스 선택하기">KG이니시스</a></li>
+                    <li class="<?php if($default['de_pg_service'] == 'nicepay') echo 'tab-current'; ?>"><a href="#nicepay_info_anchor" data-value="nicepay" title="NICEPAY 선택하기">NICEPAY</a></li>
                 </ul>
             </td>
         </tr>
@@ -781,16 +625,17 @@ if(!$default['de_kakaopay_cancelpwd']){
         <tr class="pg_info_fld kcp_info_fld">
             <th scope="row"><label for="de_kcp_easy_pays">NHN KCP 간편결제</label></th>
             <td>
-                <?php echo help("체크시 NHN KCP 간편결제들을 활성화 합니다.\nNHN_KCP > 네이버페이, 카카오페이는 테스트결제가 되지 않습니다."); ?>
-                <input type="checkbox" id="de_easy_nhnkcp_payco" name="de_easy_pays[]" value="nhnkcp_payco" <?php if(stripos($default['de_easy_pay_services'], 'nhnkcp_payco') !== false){ echo 'checked="checked"'; } ?> > <label for="de_easy_nhnkcp_payco" disabled>PAYCO (페이코)</label><br>
-                <input type="checkbox" id="de_easy_nhnkcp_naverpay" name="de_easy_pays[]" value="nhnkcp_naverpay" <?php if(stripos($default['de_easy_pay_services'], 'nhnkcp_naverpay') !== false){ echo 'checked="checked"'; } ?> > <label for="de_easy_nhnkcp_naverpay">NAVERPAY (네이버페이)</label><br>
-                <input type="checkbox" id="de_easy_nhnkcp_kakaopay" name="de_easy_pays[]" value="nhnkcp_kakaopay" <?php if(stripos($default['de_easy_pay_services'], 'nhnkcp_kakaopay') !== false){ echo 'checked="checked"'; } ?> > <label for="de_easy_nhnkcp_kakaopay">KAKAOPAY (카카오페이)</label>
+                <?php echo help("체크시 NHN KCP 간편결제들을 활성화 합니다.\nNHN_KCP > 네이버페이, 카카오페이는 테스트결제가 되지 않습니다.\n애플페이는 IOS 기기에 모바일결제만 가능합니다."); ?>
+                <?php foreach (shop_easypay_catalog('kcp') as $easy_key => $easy_provider) { ?>
+                <input type="checkbox" name="de_easy_pays[]" id="de_easy_<?php echo $easy_key; ?>" value="<?php echo $easy_key; ?>"<?php echo in_array($easy_key, explode(',', $default['de_easy_pay_services']), true) ? ' checked' : ''; ?>>
+                <label for="de_easy_<?php echo $easy_key; ?>"><?php echo $easy_provider[0]; ?></label><br>
+                <?php } ?>
             </td>
         </tr>
         <tr class="pg_info_fld kcp_info_fld">
             <th scope="row"><label for="de_global_nhnkcp_naverpay">NHN KCP 네이버페이 사용</label></th>
             <td>
-                <?php echo help("체크시 타 PG (토스페이먼츠, KG 이니시스) 사용중일때도 NHN_KCP 를 통한 네이버페이 간편결제를 사용할수 있습니다.\n실결제시 반드시 결제대행사 NHN_KCP 항목에 KCP SITE CODE와 NHN KCP SITE KEY를 입력해야 합니다."); ?>
+                <?php echo help("선택한 PG에서 네이버페이를 지원하지 않거나 사용 설정하지 않은 경우에만 NHN KCP 네이버페이를 보조 결제로 제공합니다. 기본 PG의 네이버페이가 활성화되어 있으면 병용 버튼과 요청 경로를 사용하지 않습니다. 기존 KCP 주문의 조회·취소는 유지됩니다.\n실결제시 반드시 결제대행사 NHN_KCP 항목에 KCP SITE CODE와 NHN KCP SITE KEY를 입력해야 합니다."); ?>
                 <input type="checkbox" id="de_global_nhnkcp_naverpay" name="de_easy_pays[]" value="global_nhnkcp_naverpay" <?php if(stripos($default['de_easy_pay_services'], 'global_nhnkcp_naverpay') !== false){ echo 'checked="checked"'; } ?> > <label for="de_global_nhnkcp_naverpay">NAVERPAY (네이버페이)</label><br>
             </td>
         </tr>
@@ -812,10 +657,24 @@ if(!$default['de_kakaopay_cancelpwd']){
             </td>
         </tr>
         <tr class="pg_info_fld lg_info_fld">
-            <th scope="row"><label for="cf_lg_mert_key">토스페이먼츠 MERT KEY</label></th>
+            <th scope="row"><label for="cf_lg_mert_key">토스페이먼츠(구버전) MERT KEY</label></th>
             <td>
-                <?php echo help("토스페이먼츠 상점MertKey는 상점관리자 -> 계약정보 -> 상점정보관리에서 확인하실 수 있습니다.\n예) 95160cce09854ef44d2edb2bfb05f9f3\n<a href=\"".G5_ADMIN_URL."/config_form.php#anc_cf_cert\">기본환경설정 &gt; 본인확인</a> 설정의 토스페이먼츠 MERT KEY와 동일합니다."); ?>
+                <?php echo help("토스페이먼츠(구버전) 상점 MertKey는 상점관리자 -> 개발자센터 -> API키 -> 머트 키에서 확인하실 수 있습니다. 예) 95160cce09854ef44d2edb2bfb05f9f3\n실결제용 [라이브] 키와 테스트용 [테스트] 키는 서로 다르므로, <b>테스트로 결제시에는 [테스트] 키</b>로 변경하여 사용해주시기 바랍니다."); ?>
                 <input type="text" name="cf_lg_mert_key" value="<?php echo get_sanitize_input($config['cf_lg_mert_key']); ?>" id="cf_lg_mert_key" class="frm_input " size="36" maxlength="50">
+            </td>
+        </tr>
+        <tr class="pg_info_fld lg_info_fld_v2">
+            <th scope="row"><label for="cf_toss_client_key">토스페이먼츠 API Client Key</label></th>
+            <td>
+                <?php echo help("토스페이먼츠 API 클라이언트 키는 상점관리자 -> 개발자센터 -> API키 -> 클라이언트 키에서 확인하실 수 있습니다. 예) live_ck_tosspayment\n실결제용 [라이브] 키와 테스트용 [테스트] 키는 서로 다르므로, <b>테스트로 결제시에는 [테스트] 키</b>로 변경하여 사용해주시기 바랍니다. 예) 테스트 키: test_ck_tosspayment"); ?>
+                <input type="text" name="cf_toss_client_key" value="<?php echo get_sanitize_input($config['cf_toss_client_key']); ?>" id="cf_toss_client_key" class="frm_input " size="40" maxlength="50">
+            </td>
+        </tr>
+        <tr class="pg_info_fld lg_info_fld_v2">
+            <th scope="row"><label for="cf_toss_secret_key">토스페이먼츠 API Secret Key</label></th>
+            <td>
+                <?php echo help("토스페이먼츠 API 시크릿 키는 상점관리자 -> 개발자센터 -> API키 -> 시크릿 키에서 확인하실 수 있습니다. 예) live_sk_tosspayment\n실결제용 [라이브] 키와 테스트용 [테스트] 키는 서로 다르므로, <b>테스트로 결제시에는 [테스트] 키</b>로 변경하여 사용해주시기 바랍니다. 예) 테스트 키: test_sk_tosspayment"); ?>
+                <input type="text" name="cf_toss_secret_key" value="<?php echo get_sanitize_input($config['cf_toss_secret_key']); ?>" id="cf_toss_secret_key" class="frm_input " size="40" maxlength="50">
             </td>
         </tr>
         <tr class="pg_info_fld inicis_info_fld" id="inicis_info_anchor">
@@ -829,96 +688,114 @@ if(!$default['de_kakaopay_cancelpwd']){
             </td>
         </tr>
         <tr class="pg_info_fld inicis_info_fld">
-            <th scope="row"><label for="de_inicis_admin_key">KG이니시스 키패스워드</label></th>
+            <th scope="row"><label for="de_inicis_pro_use">KG이니시스 INIpay PRO</label></th>
             <td>
-                <?php echo help("KG이니시스에서 발급받은 4자리 상점 키패스워드를 입력합니다.\nKG이니시스 상점관리자 패스워드와 관련이 없습니다.\n키패스워드 값을 확인하시려면 상점측에 발급된 키파일 안의 readme.txt 파일을 참조해 주십시오"); ?>
-                <input type="text" name="de_inicis_admin_key" value="<?php echo get_sanitize_input($default['de_inicis_admin_key']); ?>" id="de_inicis_admin_key" class="frm_input" size="5" maxlength="4">
+                <?php echo help("체크시 PC와 모바일에서 가장 최신 결제모듈인 KG이니시스 INIpay PRO 통합 결제창을 사용합니다. 실결제시 반드시 필수로 KG이니시스 모바일 금액위변조 Hash Key 를 입력해야 합니다."); ?>
+                <input type="checkbox" name="de_inicis_pro_use" value="1" id="de_inicis_pro_use"<?php echo !empty($default['de_inicis_pro_use']) ? ' checked' : ''; ?>> <label for="de_inicis_pro_use">사용</label>
             </td>
         </tr>
         <tr class="pg_info_fld inicis_info_fld">
             <th scope="row"><label for="de_inicis_sign_key">KG이니시스 웹결제 사인키</label></th>
             <td>
-                <?php echo help("KG이니시스에서 발급받은 웹결제 사인키를 입력합니다.\nKG이니시스 상점관리자 > 상점정보 > 계약정보 > 부가정보의 웹결제 signkey생성 조회 버튼 클릭, 팝업창에서 생성 버튼 클릭 후 해당 값을 입력합니다."); ?>
+                <?php echo help("KG이니시스에서 발급받은 웹결제 사인키를 입력합니다.\n<a href='https://iniweb.inicis.com/' target='_blank'>KG이니시스 가맹점관리자</a> > 상점정보 > 계약정보 > KEY 정보의 웹결제 signkey생성 조회 버튼 클릭, 팝업창에서 생성 버튼 클릭 후 해당 값을 입력합니다."); ?>
                 <input type="text" name="de_inicis_sign_key" value="<?php echo get_sanitize_input($default['de_inicis_sign_key']); ?>" id="de_inicis_sign_key" class="frm_input" size="40" maxlength="50">
             </td>
         </tr>
         <tr class="pg_info_fld inicis_info_fld">
-            <th scope="row">
-                <label for="de_samsung_pay_use">KG이니시스 삼성페이 사용</label>
-                <a href="http://sir.kr/main/service/samsungpay.php" target="_blank" class="kg_btn">삼성페이 서비스신청하기</a>
-            </th>
+            <th scope="row"><label for="de_inicis_hash_key">KG이니시스 모바일 금액위변조 Hash Key</label></th>
             <td>
-                <?php echo help("KG이니시스와 별도로 <strong>삼성페이 사용 계약을 하신 경우</strong>에만 체크해주세요. (모바일 주문서 결제수단에 삼성페이가 노출됩니다.) <br >실결제시 반드시 결제대행사 KG이니시스 항목에 상점 아이디와 키패스워드를 입력해 주세요.", 50); ?>
-                <input type="checkbox" name="de_samsung_pay_use" value="1" id="de_samsung_pay_use"<?php echo $default['de_samsung_pay_use']?' checked':''; ?>> <label for="de_samsung_pay_use">사용</label>
+                <?php echo help("<a href='https://iniweb.inicis.com/' target='_blank'>KG이니시스 가맹점관리자</a> > 상점정보 > 계약정보 > KEY 정보의 모바일 금액위변조 HashKey를 입력합니다. INIpay PRO와 구버전 모바일 결제(간편결제 포함)에 필수이며, 미설정 시 결제를 요청할 수 없습니다."); ?>
+                <input type="text" name="de_inicis_hash_key" value="<?php echo isset($default['de_inicis_hash_key']) ? get_sanitize_input($default['de_inicis_hash_key']) : ''; ?>" id="de_inicis_hash_key" class="frm_input" size="40" maxlength="255" autocomplete="off">
             </td>
         </tr>
         <tr class="pg_info_fld inicis_info_fld">
-            <th scope="row">
-                <label for="de_inicis_lpay_use">KG이니시스 L.pay 사용</label>
-            </th>
+            <th scope="row"><label for="de_inicis_iniapi_key">KG이니시스 INIAPI KEY</label></th>
             <td>
-                <?php echo help("체크시 KG이니시스 L.pay를 사용합니다. <br >실결제시 반드시 결제대행사 KG이니시스 항목의 상점 정보( 아이디, 키패스워드, 웹결제 사인키 )를 입력해 주세요.", 50); ?>
-                <input type="checkbox" name="de_inicis_lpay_use" value="1" id="de_inicis_lpay_use"<?php echo $default['de_inicis_lpay_use']?' checked':''; ?>> <label for="de_inicis_lpay_use">사용</label>
+                <?php echo help("<a href='https://iniweb.inicis.com/' target='_blank'>KG이니시스 가맹점관리자</a> > 상점정보 > 계약정보 > KEY 정보 > INIAPI key 생성 조회 하여 KEY를 여기에 입력합니다.\n이 항목은 영카트 주문에서 kg이니시스 PG 결제 취소, 부분취소, 에스크로 배송등록, 현금영수증 발급에 필요합니다."); ?>
+                <input type="text" name="de_inicis_iniapi_key" value="<?php echo get_sanitize_input($default['de_inicis_iniapi_key']); ?>" id="de_inicis_iniapi_key" class="frm_input" size="30" maxlength="30">
             </td>
         </tr>
         <tr class="pg_info_fld inicis_info_fld">
-            <th scope="row">
-                <label for="de_inicis_kakaopay_use">KG이니시스 카카오페이 사용</label>
-            </th>
+            <th scope="row"><label for="de_inicis_iniapi_iv">KG이니시스 INIAPI IV</label></th>
             <td>
-                <?php echo help("체크시 KG이니시스 결제의 카카오페이를 사용합니다. 주문서 결제수단에 카카오페이가 노출됩니다. <br>실결제시 반드시 결제대행사 KG이니시스 항목의 상점 정보( 아이디, 키패스워드, 웹결제 사인키 )를 입력해 주세요.", 50); ?>
-                <input type="checkbox" name="de_inicis_kakaopay_use" value="1" id="de_inicis_kakaopay_use"<?php echo $default['de_inicis_kakaopay_use']?' checked':''; ?>> <label for="de_inicis_kakaopay_use">사용</label>
+                <?php echo help("<a href='https://iniweb.inicis.com/' target='_blank'>KG이니시스 가맹점관리자</a> > 상점정보 > 계약정보 > KEY 정보 > INIAPI IV 생성 조회 하여 KEY를 여기에 입력합니다.\n이 항목은 영카트 주문에서 kg이니시스 현금영수증 발급에 필요합니다."); ?>
+                <input type="text" name="de_inicis_iniapi_iv" value="<?php echo get_sanitize_input($default['de_inicis_iniapi_iv']); ?>" id="de_inicis_iniapi_iv" class="frm_input" size="30" maxlength="30">
             </td>
         </tr>
+        <tr class="pg_info_fld inicis_info_fld">
+            <th scope="row">KG이니시스 PRO 운영 감시</th>
+            <td>
+                <?php echo help("결제 이상 알림과 미진행 거래 정리는 서버 작업 스케줄러 없이 사이트 접속 흐름에서 자동 실행됩니다. KG이니시스 INIAPI 거래대사는 관리자 접속 시 함께 실행됩니다.\n관리자 접속이 드물거나 독립 실행이 필요하면 서버 작업 스케줄러에서 5~10분 간격으로 다음 명령을 추가로 실행할 수 있습니다(선택).\nphp ".G5_SHOP_PATH."/inicis/pro/monitor.php --host=".preg_replace('/[^A-Za-z0-9.:-]/', '', isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'localhost').((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? ' --https' : '')." --client-ip=".preg_replace('/[^0-9.]/', '', isset($_SERVER['SERVER_ADDR']) ? $_SERVER['SERVER_ADDR'] : '')."\n거래대사는 최근 완료 거래와 확인 필요 거래를 KG이니시스 INIAPI로 조회하며 주문 생성이나 결제 취소를 자동 실행하지 않습니다."); ?>
+                <input type="checkbox" name="de_inicis_pro_alert_use" value="1" id="de_inicis_pro_alert_use"<?php echo !empty($default['de_inicis_pro_alert_use']) ? ' checked' : ''; ?>> <label for="de_inicis_pro_alert_use">이상 거래 메일 알림</label>
+                &nbsp;
+                <input type="checkbox" name="de_inicis_pro_reconcile_use" value="1" id="de_inicis_pro_reconcile_use"<?php echo !empty($default['de_inicis_pro_reconcile_use']) ? ' checked' : ''; ?>> <label for="de_inicis_pro_reconcile_use">최근 완료·확인 필요 거래 자동 대사</label>
+                <br>최근 감시: <?php echo !empty($default['de_inicis_pro_monitor_at']) ? get_text($default['de_inicis_pro_monitor_at']) : '실행 기록 없음'; ?>
+                <?php if (!empty($default['de_inicis_pro_monitor_message'])) { ?> / <?php echo get_text($default['de_inicis_pro_monitor_message']); ?><?php } ?>
+            </td>
+        </tr>
+        <tr class="pg_info_fld inicis_info_fld">
+            <th scope="row"><label for="de_inicis_pro_log_days">PRO 상세 이력 보존기간</label></th>
+            <td>
+                <?php echo help("단계별 상세 이력과 기존 이니시스 로그의 결제 응답 payload를 설정 기간 이후 순차 삭제합니다. 결제 요약은 아래의 별도 보존기간을 적용합니다. 0은 자동 정리 안 함이며, 보존하는 경우 30~3650일로 설정하십시오."); ?>
+                <input type="text" name="de_inicis_pro_log_days" value="<?php echo isset($default['de_inicis_pro_log_days']) ? (int) $default['de_inicis_pro_log_days'] : 365; ?>" id="de_inicis_pro_log_days" class="frm_input" size="6" maxlength="4"> 일
+            </td>
+        </tr>
+        <tr class="pg_info_fld inicis_info_fld">
+            <th scope="row"><label for="de_inicis_pro_summary_days">PRO 결제 요약 보존기간</label></th>
+            <td>
+                <?php echo help("주문이 이미 삭제됐고 확인 또는 환불이 필요하지 않은 최종 결제 요약을 설정 기간 이후 순차 삭제합니다. 실제 주문이 남아 있거나 환불 확인이 필요한 거래는 삭제하지 않습니다. 0은 자동 정리 안 함이며, 보존하는 경우 365~3650일로 설정하십시오."); ?>
+                <input type="text" name="de_inicis_pro_summary_days" value="<?php echo isset($default['de_inicis_pro_summary_days']) ? (int) $default['de_inicis_pro_summary_days'] : 1825; ?>" id="de_inicis_pro_summary_days" class="frm_input" size="6" maxlength="4"> 일
+            </td>
+        </tr>
+        <?php foreach (array('inicis' => 'KG이니시스', 'toss' => '토스페이먼츠 API') as $easy_pg => $easy_title) { ?>
+        <tr class="pg_info_fld <?php echo $easy_pg; ?>_info_fld">
+            <th scope="row"><?php echo $easy_title; ?> 간편결제</th>
+            <td>
+                <?php echo help("PG사 간편결제 버튼 사용을 '노출함'으로 설정하고, 해당 PG와 계약하여 사용할 수 있는 수단만 선택하세요. 계약 상태는 PG사에 확인해야 하며 이 화면에서 자동 조회하지 않습니다. 자체창 호출에 별도 계약이 필요할 수 있고 일부 수단은 테스트 결제를 지원하지 않습니다. 실제 MID에서 승인·취소를 확인한 후 제공하세요.\n애플페이는 iOS 모바일에서만 표시합니다. 삼성페이는 PC에서 휴대폰으로 연결하며 구 INIpay에서는 모바일에서만 표시합니다.\nKG이니시스는 삼성페이·L.pay·카카오페이를 지원하며 INIpay PRO는 HashKey, 구버전은 웹결제 사인키와 모바일 금액위변조 HashKey가 필요합니다."); ?>
+                <?php foreach (shop_easypay_catalog($easy_pg) as $easy_key => $easy_provider) { ?>
+                <input type="checkbox" name="de_easy_pays[]" id="de_easy_<?php echo $easy_key; ?>" value="<?php echo $easy_key; ?>"<?php echo in_array($easy_key, explode(',', $default['de_easy_pay_services']), true) ? ' checked' : ''; ?>>
+                <label for="de_easy_<?php echo $easy_key; ?>"><?php echo $easy_provider[0]; ?></label><br>
+                <?php } ?>
+            </td>
+        </tr>
+        <?php } ?>
         <tr class="pg_info_fld inicis_info_fld">
             <th scope="row">
                 <label for="de_inicis_cartpoint_use">KG이니시스 신용카드 포인트 결제</label>
             </th>
             <td>
-                <?php echo help("신용카드 포인트 결제에 대해 이니시스와 계약을 맺은 상점에서만 적용하는 옵션입니다.<br>체크시 pc 결제에서는 신용카드 포인트 사용 여부에 대한 팝업창에 사용 버튼과 사용안함 버튼이 표기되어 결제하는 고객의 선택여부에 따라 신용카드 포인트 결제가 가능합니다.<br >모바일에서는 신용카드 포인트 사용이 가능합니다.", 50); ?>
+                <?php echo help("신용카드 포인트 결제에 대해 이니시스와 계약을 맺은 상점에서만 적용하는 구버전 결제 옵션입니다.<br>체크 시 PC 결제에서는 신용카드 포인트 사용 여부를 선택할 수 있고 모바일에서도 카드 포인트를 사용할 수 있습니다.<br>INIpay PRO에는 이 설정을 전달하지 않습니다. PRO 카드 포인트 사용은 KG이니시스에서 해당 MID의 지원 여부와 요청 규격을 확인한 후 적용해야 합니다.", 50); ?>
                 <input type="checkbox" name="de_inicis_cartpoint_use" value="1" id="de_inicis_cartpoint_use"<?php echo $default['de_inicis_cartpoint_use']?' checked':''; ?>> <label for="de_inicis_cartpoint_use">사용</label>
             </td>
         </tr>
-        <tr class="kakao_info_fld">
-            <th scope="row">
-                <label for="de_kakaopay_mid">카카오페이 상점아이디<br>( KG이니시스 )</label>
-                <a href="http://sir.kr/main/service/kakaopay.php?kk=yc5" target="_blank" class="kakao_btn">카카오페이 서비스신청하기</a>
-            </th>
+
+        <tr class="pg_info_fld nicepay_info_fld" id="nicepay_info_anchor">
+            <th scope="row"><label for="de_nicepay_mid">NICEPAY MID</label><br><a href="http://sir.kr/main/service/nicepayments_pg.php" target="_blank" id="scf_nicepay_reg" class="nicepay_btn">NICEPAY 신청하기</a></th>
             <td>
-                <?php echo help("KG이니시스로 부터 카카오페이 간편결제만 사용용도로 발급 받으신 상점아이디(MID) 10자리 중 SIRK 을 제외한 나머지 6자리를 입력 합니다."); ?>
-                <span class="sitecode">SIRK</span> <input type="text" name="de_kakaopay_mid" value="<?php echo get_sanitize_input($default['de_kakaopay_mid']); ?>" id="de_kakaopay_mid" class="frm_input code_input" size="10" maxlength="7">
+                <span class="frm_info">NICEPAY로 부터 발급 받으신 상점MID를 SR 을 제외한 나머지 자리를 입력 합니다.<br>NICEPAY 상점관리자 > 가맹점정보 > KEY관리에서 확인 할수 있습니다.<br>만약, 상점아이디가 SR로 시작하지 않는다면 계약담당자에게 변경 요청을 해주시기 바랍니다. 예) SRpaytestm</span>
+                <span class="sitecode">SR</span>
+                <input type="text" name="de_nicepay_mid" value="<?php echo get_sanitize_input($default['de_nicepay_mid']); ?>" id="de_nicepay_mid" class="frm_input" size="12" maxlength="12">
+                영문소문자(숫자포함 가능)
             </td>
         </tr>
-        <tr class="kakao_info_fld">
-            <th scope="row"><label for="de_kakaopay_key">카카오페이 상점키<br>( KG이니시스 )</label></th>
+        <tr class="pg_info_fld nicepay_info_fld">
+            <th scope="row"><label for="de_nicepay_key">NICEPAY KEY</label></th>
             <td>
-                <?php echo help("SIRK****** 아이디로 KG이니시스에서 발급받은 웹결제 사인키를 입력합니다.\nKG이니시스 상점관리자 > 상점정보 > 계약정보 > 부가정보의 웹결제 signkey생성 조회 버튼 클릭, 팝업창에서 생성 버튼 클릭 후 해당 값을 입력합니다."); ?>
-                <input type="text" name="de_kakaopay_key" value="<?php echo get_sanitize_input($default['de_kakaopay_key']); ?>" id="de_kakaopay_key" class="frm_input" size="100">
+                <input type="text" name="de_nicepay_key" value="<?php echo get_sanitize_input($default['de_nicepay_key']); ?>" id="de_nicepay_key" class="frm_input" size="100" maxlength="100">
             </td>
         </tr>
-        <tr class="kakao_info_fld">
-            <th scope="row"><label for="de_kakaopay_cancelpwd">카카오페이 키패스워드<br>( KG이니시스 )</label></th>
+
+        <tr class="pg_info_fld nicepay_info_fld">
+            <th scope="row"><label for="de_nicepay_easy_pays">NICEPAY 간편결제</label></th>
             <td>
-                <?php echo help("SIRK****** 아이디로 KG이니시스에서 발급받은 4자리 상점 키패스워드를 입력합니다.\nKG이니시스 상점관리자 패스워드와 관련이 없습니다.\n키패스워드 값을 확인하시려면 상점측에 발급된 키파일 안의 readme.txt 파일을 참조해 주십시오"); ?>
-                <input type="text" name="de_kakaopay_cancelpwd" value="<?php echo get_sanitize_input($default['de_kakaopay_cancelpwd']); ?>" id="de_kakaopay_cancelpwd" class="frm_input" size="20">
+                <?php echo help("체크시 NICEPAY 간편결제들을 활성화 합니다.\nNICEPAY > 간편결제는 테스트결제가 되지 않습니다. 실결제에만 정상작동 합니다.\n애플페이는 IOS 기기에 모바일결제만 가능합니다."); ?>
+                <?php foreach (shop_easypay_catalog('nicepay') as $easy_key => $easy_provider) { ?>
+                <input type="checkbox" name="de_easy_pays[]" id="de_easy_<?php echo $easy_key; ?>" value="<?php echo $easy_key; ?>"<?php echo in_array($easy_key, explode(',', $default['de_easy_pay_services']), true) ? ' checked' : ''; ?>>
+                <label for="de_easy_<?php echo $easy_key; ?>"><?php echo $easy_provider[0]; ?></label><br>
+                <?php } ?>
             </td>
         </tr>
-        <tr class="kakao_info_fld">
-            <th scope="row">
-                <label for="de_kakaopay_enckey">카카오페이 사용</label>
-            </th>
-            <td>
-                <?php echo help("체크시 카카오페이 (KG 이니시스)를 사용합니다. <br >KG 이니시스의 SIRK****** 아이디를 받은 상점만 해당됩니다.", 50); ?>
-                <input type="checkbox" name="de_kakaopay_enckey" value="1" id="de_kakaopay_enckey"<?php echo $default['de_kakaopay_enckey']?' checked':''; ?>> <label for="de_kakaopay_enckey">사용</label>
-            </td>
-        </tr>
-        <tr class="kakao_info_fld" style="display:none">
-            <th scope="row"><label for="de_kakaopay_hashkey">카카오페이 상점 HashKey</label></th>
-            <td>
-                <?php echo help("카카오페이로 부터 발급 받으신 상점 인증 전용 HashKey를 입력합니다."); ?>
-                <input type="text" name="de_kakaopay_hashkey" value="<?php echo get_sanitize_input($default['de_kakaopay_hashkey']); ?>" id="de_kakaopay_hashkey" class="frm_input" size="20">
-            </td>
-        </tr>
+
         <?php if (defined('G5_SHOP_DIRECT_NAVERPAY') && G5_SHOP_DIRECT_NAVERPAY) { ?>
         <tr class="naver_info_fld">
             <th scope="row">
@@ -1007,8 +884,10 @@ if(!$default['de_kakaopay_cancelpwd']){
                     <a href="http://testadmin8.kcp.co.kr/" target="_blank" class="btn_frmline">테스트 관리자</a>
                 </div>
                 <div class="scf_cardtest lg_cardtest">
-                    <a href="https://pgweb.uplus.co.kr/" target="_blank" class="btn_frmline">실결제 관리자</a>
-                    <a href="https://pgweb.uplus.co.kr/tmert" target="_blank" class="btn_frmline">테스트 관리자</a>
+                    <a href="https://app.tosspayments.com/" target="_blank" class="btn_frmline">상점 관리자</a>
+                </div>
+                <div class="scf_cardtest toss_cardtest">
+                    <a href="https://app.tosspayments.com/" target="_blank" class="btn_frmline">상점 관리자</a>
                 </div>
                 <div class="scf_cardtest inicis_cardtest">
                     <a href="https://iniweb.inicis.com/" target="_blank" class="btn_frmline">상점 관리자</a>
@@ -1029,11 +908,14 @@ if(!$default['de_kakaopay_cancelpwd']){
                         <dt>휴대폰</dt><dd>테스트 지원되지 않음.</dd>
                     </dl>
                     <ul id="kcp_cardtest_tip" class="scf_cardtest_tip_adm scf_cardtest_tip_adm_hide">
-                        <li>테스트결제의 <a href="http://testadmin8.kcp.co.kr/assist/login.LoginAction.do" target="_blank">상점관리자</a> 로그인 정보는 NHN KCP로 문의하시기 바랍니다. (기술지원 1544-8661)</li>
+                        <li>테스트결제의 <a href="https://testpartner.kcp.co.kr/" target="_blank">상점관리자</a> 로그인 정보는 NHN KCP로 문의하시기 바랍니다. (기술지원 1544-8661)</li>
                         <li><b>일반결제</b>의 테스트 사이트코드는 <b>T0000</b> 이며, <b>에스크로 결제</b>의 테스트 사이트코드는 <b>T0007</b> 입니다.</li>
                     </ul>
                     <ul id="lg_cardtest_tip" class="scf_cardtest_tip_adm scf_cardtest_tip_adm_hide">
-                        <li>테스트결제의 <a href="http://pgweb.dacom.net:7085/" target="_blank">상점관리자</a> 로그인 정보는 토스페이먼츠 상점아이디 첫 글자에 t를 추가해서 로그인하시기 바랍니다. 예) tsi_lguplus</li>
+                        <li>테스트 결제건에 대한 <a href="https://app.tosspayments.com/" target="_blank">상점관리자</a> 접근은, 상점관리자 상단 '테스트 모드'를 활성화 하여서 접근할 수 있습니다.</li>
+                    </ul>
+                    <ul id="toss_cardtest_tip" class="scf_cardtest_tip_adm scf_cardtest_tip_adm_hide">
+                        <li>테스트 결제건에 대한 <a href="https://app.tosspayments.com/" target="_blank">상점관리자</a> 접근은, 상점관리자 상단 '테스트 모드'를 활성화 하여서 접근할 수 있습니다.</li>
                     </ul>
                     <ul id="inicis_cardtest_tip" class="scf_cardtest_tip_adm scf_cardtest_tip_adm_hide">
                         <li><b>일반결제</b>의 테스트 사이트 mid는 <b>INIpayTest</b> 이며, <b>에스크로 결제</b>의 테스트 사이트 mid는 <b>iniescrow0</b> 입니다.</li>
@@ -1694,6 +1576,26 @@ function byte_check(el_cont, el_byte)
 </form>
 
 <script>
+function inicis_pro_retention_check(id, min, label)
+{
+    var el = document.getElementById(id);
+    if (!el) return true;
+    var raw = el.value.replace(/^\s+|\s+$/g, "");
+    if (raw === "") return true;
+    if (!/^[0-9]+$/.test(raw)) {
+        alert("INIpay PRO " + label + " 보존기간은 숫자로 입력해 주십시오.");
+        el.focus();
+        return false;
+    }
+    var days = parseInt(raw, 10);
+    if (days !== 0 && (days < min || days > 3650)) {
+        alert("INIpay PRO " + label + " 보존기간은 0 또는 " + min + "~3650일로 설정해 주십시오.");
+        el.focus();
+        return false;
+    }
+    return true;
+}
+
 function fconfig_check(f)
 {
     <?php echo get_editor_js('de_baesong_content'); ?>
@@ -1703,17 +1605,48 @@ function fconfig_check(f)
     var msg = "",
         pg_msg = "";
 
+    if (!inicis_pro_retention_check("de_inicis_pro_log_days", 30, "상세 이력")) return false;
+    if (!inicis_pro_retention_check("de_inicis_pro_summary_days", 365, "결제 요약")) return false;
+
+    if (f.de_pg_service.value == "inicis") {
+        var pro_use_el = document.getElementById("de_inicis_pro_use");
+        var inicis_test = parseInt(f.de_card_test.value, 10) > 0;
+        if (pro_use_el && pro_use_el.checked && !inicis_test) {
+            var hash_el = document.getElementById("de_inicis_hash_key");
+            if (hash_el && hash_el.value.replace(/[^A-Za-z0-9+\/=_-]/g, "") === "") {
+                alert("INIpay PRO를 사용하려면 HashKey를 입력해 주십시오.");
+                hash_el.focus();
+                return false;
+            }
+            var reconcile_el = document.getElementById("de_inicis_pro_reconcile_use");
+            var iniapi_el = document.getElementById("de_inicis_iniapi_key");
+            if (reconcile_el && reconcile_el.checked && iniapi_el && iniapi_el.value.replace(/^\s+|\s+$/g, "") === "") {
+                alert("INIpay PRO 자동 거래대사를 사용하려면 INIAPI KEY를 입력해 주십시오.");
+                iniapi_el.focus();
+                return false;
+            }
+        }
+    }
+
     if( f.de_pg_service.value == "kcp" ){
         if( f.de_kcp_mid.value && f.de_kcp_site_key.value && parseInt(f.de_card_test.value) > 0 ){
             pg_msg = "NHN KCP";
         }
     } else if ( f.de_pg_service.value == "lg" ) {
         if( f.cf_lg_mid.value && f.cf_lg_mert_key.value && parseInt(f.de_card_test.value) > 0 ){
-            pg_msg = "토스페이먼츠";
+            msg += "(주의!) 토스페이먼츠(구버전) 결제의 결제 설정이 현재 테스트결제로 되어 있습니다.\nMERT KEY를 [테스트]키로 설정한 후 테스트결제를 진행해주세요.\n쇼핑몰 운영중이면 반드시 실결제 전환 및 [라이브]키로 설정하여 운영하셔야 합니다.\n실결제로 변경하려면 결제설정 탭 -> 결제 테스트에서 실결제를 선택해 주세요.\n정말로 테스트결제로 설정하시겠습니까?";
+        }
+    } else if ( f.de_pg_service.value == "toss" ) {
+        if( f.cf_lg_mid.value && f.cf_toss_client_key.value && f.cf_toss_secret_key.value && parseInt(f.de_card_test.value) > 0 ){
+            msg += "(주의!) 토스페이먼츠 결제의 결제 설정이 현재 테스트결제로 되어 있습니다.\n상점 API키를 [테스트]키로 설정한 후 테스트결제를 진행해주세요.\n쇼핑몰 운영중이면 반드시 실결제 전환 및 [라이브]키로 설정하여 운영하셔야 합니다.\n실결제로 변경하려면 결제설정 탭 -> 결제 테스트에서 실결제를 선택해 주세요.\n정말로 테스트결제로 설정하시겠습니까?";
         }
     } else if ( f.de_pg_service.value == "inicis" ) {
         if( f.de_inicis_mid.value && f.de_inicis_sign_key.value && parseInt(f.de_card_test.value) > 0 ){
             pg_msg = "KG이니시스";
+        }
+    } else if ( f.de_pg_service.value == "nicepay" ) {
+        if( f.de_nicepay_mid.value && f.de_nicepay_key.value && parseInt(f.de_card_test.value) > 0 ){
+            pg_msg = "NICEPAY";
         }
     }
 
@@ -2011,43 +1944,13 @@ if($default['de_iche_use'] || $default['de_vbank_use'] || $default['de_hp_use'] 
         } catch(Exception $e) {
         }
 
-        if(!is_dir($log_path)) {
-            echo '<script>'.PHP_EOL;
-            echo 'alert("'.str_replace(G5_PATH.'/', '', G5_SHOP_PATH).'/inicis 폴더 안에 log 폴더를 생성하신 후 쓰기권한을 부여해 주십시오.\n> mkdir log\n> chmod 707 log");'.PHP_EOL;
-            echo '</script>'.PHP_EOL;
-        } else {
-            if(!is_writable($log_path)) {
-                echo '<script>'.PHP_EOL;
-                echo 'alert("'.str_replace(G5_PATH.'/', '',$log_path).' 폴더에 쓰기권한을 부여해 주십시오.\n> chmod 707 log");'.PHP_EOL;
-                echo '</script>'.PHP_EOL;
-            } else {
-                if( function_exists('check_log_folder') && is_writable($log_path) ){
-                    check_log_folder($log_path);
-                }
-            }
+        if( function_exists('check_log_folder') && is_writable($log_path) ){
+            check_log_folder($log_path);
         }
     }
 
-    // 카카오페이의 경우 log 디렉토리 체크
-    if($default['de_kakaopay_mid'] && $default['de_kakaopay_key'] && $default['de_kakaopay_enckey'] && $default['de_kakaopay_hashkey'] && $default['de_kakaopay_cancelpwd']) {
-        $log_path = G5_SHOP_PATH.'/kakaopay/log';
 
-        if(!is_dir($log_path)) {
-            echo '<script>'.PHP_EOL;
-            echo 'alert("'.str_replace(G5_PATH.'/', '', G5_SHOP_PATH).'/kakaopay 폴더 안에 log 폴더를 생성하신 후 쓰기권한을 부여해 주십시오.\n> mkdir log\n> chmod 707 log");'.PHP_EOL;
-            echo '</script>'.PHP_EOL;
-        } else {
-            if(!is_writable($log_path)) {
-                echo '<script>'.PHP_EOL;
-                echo 'alert("'.str_replace(G5_PATH.'/', '',$log_path).' 폴더에 쓰기권한을 부여해 주십시오.\n> chmod 707 log");'.PHP_EOL;
-                echo '</script>'.PHP_EOL;
-            } else {
-                if( function_exists('check_log_folder') && is_writable($log_path) ){
-                    check_log_folder($log_path);
-                }
-            }
-        }
-    }
 }
+
 
 include_once (G5_ADMIN_PATH.'/admin.tail.php');

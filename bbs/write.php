@@ -20,7 +20,7 @@ if (!($w == '' || $w == 'u' || $w == 'r')) {
 }
 
 if ($w == 'u' || $w == 'r') {
-    if ($write['wr_id']) {
+    if (isset($write['wr_id']) && $write['wr_id']) {
         // 가변 변수로 $wr_1 .. $wr_10 까지 만든다.
         for ($i=1; $i<=10; $i++) {
             $vvar = "wr_".$i;
@@ -309,12 +309,15 @@ if ($w == '') {
     $password_required = 'required';
 } else if ($w == 'u') {
     $password_required = '';
+    set_session(g5_write_edit_auth_key($bo_table, $wr_id), '');
 
     if (!$is_admin) {
         if (!($is_member && $member['mb_id'] === $write['mb_id'])) {
             if (!check_password($wr_password, $write['wr_password'])) {
                 $is_wrong = run_replace('invalid_password', false, 'write', $write);
                 if(!$is_wrong) alert('비밀번호가 틀립니다.');
+            } else if (empty($write['mb_id'])) {
+                g5_grant_write_edit_auth($bo_table, $write);
             }
         }
     }
@@ -346,8 +349,10 @@ if ($w == '') {
     }
 
     for($i=0;$i<$file_count;$i++){
-        if(! isset($file[$i])) {
+        if (!isset($file[$i])) {
             $file[$i] = array('file'=>null, 'source'=>null, 'size'=>null, 'bf_content' => null);
+        } else {
+            $file[$i]['bf_content'] = isset($file[$i]['bf_content']) ? htmlspecialchars($file[$i]['bf_content'], ENT_QUOTES, 'UTF-8', false) : null;
         }
     }
 

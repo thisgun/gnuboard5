@@ -1,5 +1,7 @@
 <?php
-include_once('./_common.php');
+if (!defined("_GNUBOARD_")) exit; // 개별 페이지 접근 불가
+
+$od_id = isset($_REQUEST['od_id']) ? safe_replace_regex($_REQUEST['od_id'], 'od_id') : '';
 
 // 테마에 orderinquiryview.php 있으면 include
 if(defined('G5_THEME_MSHOP_PATH')) {
@@ -246,6 +248,7 @@ if($od['od_pg'] == 'lg') {
             $app_no_subj = '승인번호';
             $app_no = $od['od_app_no'];
             $disp_bank = false;
+            $disp_receipt = true;
         } else if($od['od_settle_case'] == '휴대폰') {
             $app_no_subj = '휴대폰번호';
             $app_no = $od['od_bank_account'];
@@ -277,7 +280,7 @@ if($od['od_pg'] == 'lg') {
                 </tr>
                 <tr>
                     <th scope="row">결제방식</th>
-                    <td><?php echo check_pay_name_replace($od['od_settle_case'], $od, 1); ?></td>
+                    <td><?php echo get_text(check_pay_name_replace($od['od_settle_case'], $od, 1)); ?></td>
                 </tr>
                 <tr>
                     <th scope="row">결제금액</th>
@@ -295,7 +298,7 @@ if($od['od_pg'] == 'lg') {
                 }
 
                 // 승인번호, 휴대폰번호, 거래번호
-                if($app_no_subj && $app_no)
+                if($app_no_subj && trim($app_no))
                 {
                 ?>
                 <tr>
@@ -335,8 +338,12 @@ if($od['od_pg'] == 'lg') {
                                 $LGD_HASHDATA = md5($LGD_MID.$LGD_TID.$LGD_MERTKEY);
 
                                 $hp_receipt_script = 'showReceiptByTID(\''.$LGD_MID.'\', \''.$LGD_TID.'\', \''.$LGD_HASHDATA.'\');';
+                            } else if($od['od_pg'] == 'toss') {
+	                            $hp_receipt_script = 'window.open(\'https://dashboard.tosspayments.com/receipt/phone?transactionId='.$od['od_tno'].'&ref=PX\',\'receipt\',\'width=430,height=700\');';
                             } else if($od['od_pg'] == 'inicis') {
                                 $hp_receipt_script = 'window.open(\'https://iniweb.inicis.com/DefaultWebApp/mall/cr/cm/mCmReceipt_head.jsp?noTid='.$od['od_tno'].'&noMethod=1\',\'receipt\',\'width=430,height=700\');';
+                            } else if($od['od_pg'] == 'nicepay') {
+                                $hp_receipt_script = 'window.open(\'https://npg.nicepay.co.kr/issue/IssueLoader.do?type=0&TID='.$od['od_tno'].'&noMethod=1\',\'receipt\',\'width=430,height=700\');';
                             } else {
                                 $hp_receipt_script = 'window.open(\''.G5_BILL_RECEIPT_URL.'mcash_bill&tno='.$od['od_tno'].'&order_no='.$od['od_id'].'&trade_mony='.$od['od_receipt_price'].'\', \'winreceipt\', \'width=500,height=690,scrollbars=yes,resizable=yes\');';
                             }
@@ -345,7 +352,7 @@ if($od['od_pg'] == 'lg') {
                         <?php
                         }
 
-                        if($od['od_settle_case'] == '신용카드' || is_inicis_order_pay($od['od_settle_case']) || (shop_is_taxsave($od, true) && $misu_price == 0) )
+                        if($od['od_settle_case'] == '신용카드' || $od['od_settle_case'] == '간편결제' || is_inicis_order_pay($od['od_settle_case']) || (shop_is_taxsave($od, true) && $misu_price == 0) )
                         {
                             if($od['od_pg'] == 'lg') {
                                 require_once G5_SHOP_PATH.'/settle_lg.inc.php';
@@ -354,6 +361,10 @@ if($od['od_pg'] == 'lg') {
                                 $LGD_HASHDATA = md5($LGD_MID.$LGD_TID.$LGD_MERTKEY);
 
                                 $card_receipt_script = 'showReceiptByTID(\''.$LGD_MID.'\', \''.$LGD_TID.'\', \''.$LGD_HASHDATA.'\');';
+                            } else if($od['od_pg'] == 'toss') {
+	                            $card_receipt_script = 'window.open(\'https://dashboard.tosspayments.com/receipt/redirection?transactionId='.$od['od_tno'].'&ref=PX\',\'receipt\',\'width=430,height=700\');';
+                            } else if($od['od_pg'] == 'nicepay') {
+                                $card_receipt_script = 'window.open(\'https://npg.nicepay.co.kr/issue/IssueLoader.do?type=0&TID='.$od['od_tno'].'&noMethod=1\',\'receipt\',\'width=430,height=700\');';
                             } else if($od['od_pg'] == 'inicis') {
                                 $card_receipt_script = 'window.open(\'https://iniweb.inicis.com/DefaultWebApp/mall/cr/cm/mCmReceipt_head.jsp?noTid='.$od['od_tno'].'&noMethod=1\',\'receipt\',\'width=430,height=700\');';
                             } else {
@@ -399,10 +410,10 @@ if($od['od_pg'] == 'lg') {
                 <?php
                 }
 
-                // 현금영수증 발급을 사용하는 경우에만
-                if (function_exists('shop_is_taxsave') && shop_is_taxsave($od)) {
+                // 현금영수증 발급을 사용하는 경우 또는 현금영수증 발급을 한 주문건이면
+                if ((function_exists('shop_is_taxsave') && shop_is_taxsave($od)) || (function_exists('is_order_cashreceipt') && is_order_cashreceipt($od))) {
                     // 미수금이 없고 현금일 경우에만 현금영수증을 발급 할 수 있습니다.
-                    if ($misu_price == 0 && $od['od_receipt_price'] && ($od['od_settle_case'] == '무통장' || $od['od_settle_case'] == '계좌이체' || $od['od_settle_case'] == '가상계좌')) {
+                    if ($misu_price == 0 && is_order_cashreceipt($od)) {
                 ?>
                 <tr>
                     <th scope="row">현금영수증</th>
@@ -425,9 +436,17 @@ if($od['od_pg'] == 'lg') {
                                     break;
                             }
                             $cash_receipt_script = 'javascript:showCashReceipts(\''.$LGD_MID.'\',\''.$od['od_id'].'\',\''.$od['od_casseqno'].'\',\''.$trade_type.'\',\''.$CST_PLATFORM.'\');';
+                        } else if($od['od_pg'] == 'toss') {
+                            $cash_receipt_script = 'window.open(\'https://dashboard.tosspayments.com/receipt/mids/si_'.$config['cf_lg_mid'].'/orders/'.$od['od_id'].'/cash-receipt?ref=dashboard\',\'receipt\',\'width=430,height=700\');';
                         } else if($od['od_pg'] == 'inicis') {
                             $cash = unserialize($od['od_cash_info']);
                             $cash_receipt_script = 'window.open(\'https://iniweb.inicis.com/DefaultWebApp/mall/cr/cm/Cash_mCmReceipt.jsp?noTid='.$cash['TID'].'&clpaymethod=22\',\'showreceipt\',\'width=380,height=540,scrollbars=no,resizable=no\');';
+                        } else if($od['od_pg'] == 'nicepay') {
+                            $cash = $od['od_cash_info'] ? unserialize($od['od_cash_info']) : array();
+                            if(!is_array($cash))
+                                $cash = array();
+                            $cash_tid = isset($cash['TID']) && $cash['TID'] ? $cash['TID'] : $od['od_tno'];
+                            $cash_receipt_script = 'window.open(\'https://npg.nicepay.co.kr/issue/IssueLoader.do?type=1&TID='.$cash_tid.'&noMethod=1\',\'receipt\',\'width=430,height=700\');';
                         } else {
                             require_once G5_SHOP_PATH.'/settle_kcp.inc.php';
 
@@ -438,7 +457,7 @@ if($od['od_pg'] == 'lg') {
                         <a href="javascript:;" onclick="<?php echo $cash_receipt_script; ?>">현금영수증 확인하기</a>
                     <?php
                     }
-                    else
+                    else if (shop_is_taxsave($od))
                     {
                     ?>
                         <a href="javascript:;" onclick="window.open('<?php echo G5_SHOP_URL; ?>/taxsave.php?od_id=<?php echo $od_id; ?>', 'taxsave', 'width=550,height=400,scrollbars=1,menus=0');">현금영수증을 발급하시려면 클릭하십시오.</a>
@@ -607,7 +626,9 @@ if($od['od_pg'] == 'lg') {
         <?php
         // 취소한 내역이 없다면
         if ($cancel_price == 0) {
-            if ($custom_cancel) {
+            if ($od['od_pg'] === 'KAKAOPAY') {
+                    echo '<p>이 주문의 취소·환불은 쇼핑몰 고객센터에 문의해 주십시오.</p>';
+                } elseif ($custom_cancel) {
         ?>
         <button type="button" onclick="document.getElementById('sod_fin_cancelfrm').style.display='block';">주문 취소하기</button>
 
@@ -651,7 +672,7 @@ if($od['od_pg'] == 'lg') {
         </tr>
         <tr>
             <th scope="col"><label for="req_name">입금자명</label></th>
-            <td><input type="text" name="req_name" value="<?php echo $od['od_deposit_name']; ?>"></td>
+            <td><input type="text" name="req_name" value="<?php echo get_text($od['od_deposit_name']); ?>"></td>
         </tr>
         <tr>
             <th scope="col"><label for="noti_url">입금통보 URL</label></th>

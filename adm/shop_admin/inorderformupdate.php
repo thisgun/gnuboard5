@@ -30,6 +30,11 @@ if($w == 'd') {
 
 // 주문정보
 $data = unserialize(base64_decode($od['dt_data']));
+if (isset($data['od_settle_case']) && $data['od_settle_case'] === 'KAKAOPAY') {
+    alert('SIRK 전용 카카오페이 미완료 주문은 결제 상태를 이니시스에서 확인한 뒤 사후지원 담당자에게 문의해 주십시오.');
+}
+$data_od_cp_id = isset($data['od_cp_id']) ? safe_replace_regex($data['od_cp_id'], 'cp_id') : '';
+$data_sc_cp_id = isset($data['sc_cp_id']) ? safe_replace_regex($data['sc_cp_id'], 'cp_id') : '';
 
 $sql_common = " from {$g5['g5_shop_cart_table']} where od_id = '{$od['cart_id']}' and ct_status = '쇼핑' ";
 
@@ -53,8 +58,8 @@ if($od['mb_id']) {
     $it_cp_cnt = (isset($data['cp_id']) && is_array($data['cp_id'])) ? count($data['cp_id']) : 0;
     $arr_it_cp_prc = array();
     for($i=0; $i<$it_cp_cnt; $i++) {
-        $cid = $data['cp_id'][$i];
-        $it_id = $data['it_id'][$i];
+        $cid = isset($data['cp_id'][$i]) ? safe_replace_regex($data['cp_id'][$i], 'cp_id') : '';
+        $it_id = isset($data['it_id'][$i]) ? safe_replace_regex($data['it_id'][$i], 'it_id') : '';
         $sql = " select cp_id, cp_method, cp_target, cp_type, cp_price, cp_trunc, cp_minimum, cp_maximum
                     from {$g5['g5_shop_coupon_table']}
                     where cp_id = '$cid'
@@ -113,10 +118,10 @@ if($od['mb_id']) {
     $tot_od_price -= $tot_it_cp_price;
 
     // 주문쿠폰
-    if(isset($data['od_cp_id']) && $data['od_cp_id']) {
+    if($data_od_cp_id) {
         $sql = " select cp_id, cp_type, cp_price, cp_trunc, cp_minimum, cp_maximum
                     from {$g5['g5_shop_coupon_table']}
-                    where cp_id = '{$data['od_cp_id']}'
+                    where cp_id = '$data_od_cp_id'
                       and mb_id IN ( '{$od['mb_id']}', '전체회원' )
                       and cp_method = '2' ";
         $cp = sql_fetch($sql);
@@ -149,10 +154,10 @@ $od_send_cost = get_sendcost($od['cart_id']);
 $tot_sc_cp_price = 0;
 if($od['mb_id'] && $od_send_cost > 0) {
     // 배송쿠폰
-    if($data['sc_cp_id']) {
+    if($data_sc_cp_id) {
         $sql = " select cp_id, cp_type, cp_price, cp_trunc, cp_minimum, cp_maximum
                     from {$g5['g5_shop_coupon_table']}
-                    where cp_id = '{$data['sc_cp_id']}'
+                    where cp_id = '$data_sc_cp_id'
                       and mb_id IN ( '{$od['mb_id']}', '전체회원' )
                       and cp_method = '3' ";
         $cp = sql_fetch($sql);
@@ -208,42 +213,43 @@ if($default['de_tax_flag_use']) {
 }
 
 $od_pg = $default['de_pg_service'];
-if($data['od_settle_case'] == 'KAKAOPAY')
-    $od_pg = 'KAKAOPAY';
 
 $od_email         = get_email_address($data['od_email']);
-$od_name          = clean_xss_tags($data['od_name']);
-$od_tel           = clean_xss_tags($data['od_tel']);
-$od_hp            = clean_xss_tags($data['od_hp']);
+$od_name          = addslashes(clean_xss_tags($data['od_name']));
+$od_tel           = addslashes(clean_xss_tags($data['od_tel']));
+$od_hp            = addslashes(clean_xss_tags($data['od_hp']));
 $od_zip           = preg_replace('/[^0-9]/', '', $data['od_zip']);
 $od_zip1          = substr($od_zip, 0, 3);
 $od_zip2          = substr($od_zip, 3);
-$od_addr1         = clean_xss_tags($data['od_addr1']);
-$od_addr2         = clean_xss_tags($data['od_addr2']);
-$od_addr3         = clean_xss_tags($data['od_addr3']);
-$od_addr_jibeon   = preg_match("/^(N|R)$/", $data['od_addr_jibeon']) ? $data['od_addr_jibeon'] : '';
-$od_b_name        = clean_xss_tags($data['od_b_name']);
-$od_b_tel         = clean_xss_tags($data['od_b_tel']);
-$od_b_hp          = clean_xss_tags($data['od_b_hp']);
+$od_addr1         = addslashes(clean_xss_tags($data['od_addr1']));
+$od_addr2         = addslashes(clean_xss_tags($data['od_addr2']));
+$od_addr3         = addslashes(clean_xss_tags($data['od_addr3']));
+$od_addr_jibeon   = preg_match("/^(N|R|J)$/", $data['od_addr_jibeon']) ? $data['od_addr_jibeon'] : '';
+$od_b_name        = addslashes(clean_xss_tags($data['od_b_name']));
+$od_b_tel         = addslashes(clean_xss_tags($data['od_b_tel']));
+$od_b_hp          = addslashes(clean_xss_tags($data['od_b_hp']));
 $od_b_zip		  = preg_replace('/[^0-9]/', '', $data['od_b_zip']);
 $od_b_zip1        = substr($od_b_zip, 0, 3);
 $od_b_zip2        = substr($od_b_zip, 3);
-$od_b_addr1       = clean_xss_tags($data['od_b_addr1']);
-$od_b_addr2       = clean_xss_tags($data['od_b_addr2']);
-$od_b_addr3       = clean_xss_tags($data['od_b_addr3']);
-$od_b_addr_jibeon = preg_match("/^(N|R)$/", $data['od_b_addr_jibeon']) ? $data['od_b_addr_jibeon'] : '';
-$od_memo          = clean_xss_tags($data['od_memo'], 0, 1, 0, 0);
-$od_deposit_name  = clean_xss_tags($data['od_deposit_name']);
+$od_b_addr1       = addslashes(clean_xss_tags($data['od_b_addr1']));
+$od_b_addr2       = addslashes(clean_xss_tags($data['od_b_addr2']));
+$od_b_addr3       = addslashes(clean_xss_tags($data['od_b_addr3']));
+$od_b_addr_jibeon = preg_match("/^(N|R|J)$/", $data['od_b_addr_jibeon']) ? $data['od_b_addr_jibeon'] : '';
+$od_memo          = addslashes(clean_xss_tags($data['od_memo'], 0, 1, 0, 0));
+$od_deposit_name  = addslashes(clean_xss_tags($data['od_deposit_name']));
 $od_tax_flag      = $default['de_tax_flag_use'];
 $od_receipt_price = $tot_ct_price + $od_send_cost + $od_send_cost2 - ($od_temp_point + $tot_cp_price + $tot_sc_cp_price);
 $od_receipt_point = $od_temp_point;
 $od_receipt_time  = $od['dt_time'];
 $od_misu          = 0;
 $od_status        = '입금';
-$od_bank_account  = isset($data['od_bank_account']) ? clean_xss_tags($data['od_bank_account'], 1, 1) : '';
+$od_bank_account  = isset($data['od_bank_account']) ? addslashes(clean_xss_tags(stripslashes($data['od_bank_account']), 1, 1)) : '';
 $od_tno = '';
 $od_app_no = '';
-$od_hope_date = isset($data['od_hope_date']) ? clean_xss_tags($data['od_hope_date'], 1, 1) : '';
+$od_hope_date = isset($data['od_hope_date']) ? addslashes(clean_xss_tags(stripslashes($data['od_hope_date']), 1, 1)) : '';
+$od_ip = (isset($data['od_ip']) && !is_array($data['od_ip']) && preg_match('/^[0-9a-fA-F:.]{1,45}$/', $data['od_ip'])) ? $data['od_ip'] : '';
+$od_settle_case = (isset($data['od_settle_case']) && !is_array($data['od_settle_case'])) ? addslashes(clean_xss_tags(stripslashes($data['od_settle_case']), 1, 1)) : '';
+$od_test = (isset($data['od_test']) && !is_array($data['od_test'])) ? (int) $data['od_test'] : 0;
 
 // 주문서에 입력
 $sql = " insert {$g5['g5_shop_order_table']}
@@ -295,9 +301,9 @@ $sql = " insert {$g5['g5_shop_order_table']}
                 od_shop_memo      = '',
                 od_hope_date      = '{$od_hope_date}',
                 od_time           = '{$od['dt_time']}',
-                od_ip             = '{$data['od_ip']}',
-                od_settle_case    = '{$data['od_settle_case']}',
-                od_test           = '{$data['od_test']}'
+                od_ip             = '$od_ip',
+                od_settle_case    = '$od_settle_case',
+                od_test           = '$od_test'
                 ";
 $result = sql_query($sql, true);
 
@@ -321,8 +327,8 @@ if ($od['mb_id'] && $od_receipt_point)
 if($od['mb_id']) {
     $it_cp_cnt = (isset($data['cp_id']) && is_array($data['cp_id'])) ? count($data['cp_id']) : 0;
     for($i=0; $i<$it_cp_cnt; $i++) {
-        $cid = $data['cp_id'][$i];
-        $cp_it_id = $data['it_id'][$i];
+        $cid = isset($data['cp_id'][$i]) ? safe_replace_regex($data['cp_id'][$i], 'cp_id') : '';
+        $cp_it_id = isset($data['it_id'][$i]) ? safe_replace_regex($data['it_id'][$i], 'it_id') : '';
         $cp_prc = isset($arr_it_cp_prc[$cp_it_id]) ? (int) $arr_it_cp_prc[$cp_it_id] : 0;
 
         if(trim($cid)) {
@@ -346,9 +352,9 @@ if($od['mb_id']) {
         sql_query($sql);
     }
 
-    if(isset($data['od_cp_id']) && $data['od_cp_id']) {
+    if($data_od_cp_id) {
         $sql = " insert into {$g5['g5_shop_coupon_log_table']}
-                    set cp_id       = '{$data['od_cp_id']}',
+                    set cp_id       = '$data_od_cp_id',
                         mb_id       = '{$od['mb_id']}',
                         od_id       = '$od_id',
                         cp_price    = '$tot_od_cp_price',
@@ -356,9 +362,9 @@ if($od['mb_id']) {
         sql_query($sql);
     }
 
-    if(isset($data['sc_cp_id']) && $data['sc_cp_id']) {
+    if($data_sc_cp_id) {
         $sql = " insert into {$g5['g5_shop_coupon_log_table']}
-                    set cp_id       = '{$data['sc_cp_id']}',
+                    set cp_id       = '$data_sc_cp_id',
                         mb_id       = '{$od['mb_id']}',
                         od_id       = '$od_id',
                         cp_price    = '$tot_sc_cp_price',
@@ -384,10 +390,16 @@ sql_query($sql);
 $sql = " delete from {$g5['g5_shop_order_data_table']} where od_id = '$od_id' and dt_pg = '$od_pg' ";
 sql_query($sql, true);
 
+$orderform_url = './orderform.php?od_id='.$od_id;
+$inorderlist_url = './inorderlist.php?'.str_replace('&amp;', '&', $qstr);
+$js_replace = array('\\' => '\\\\', '"' => '\\"', "'" => '\\u0027', '/' => '\\/', "\r" => '\\r', "\n" => '\\n', "\t" => '\\t', '<' => '\\u003C', '>' => '\\u003E', '&' => '\\u0026', "\xE2\x80\xA8" => '\\u2028', "\xE2\x80\xA9" => '\\u2029');
+$js_orderform_url = function_exists('get_js_safe_string') ? get_js_safe_string($orderform_url) : '"'.strtr((string)$orderform_url, $js_replace).'"';
+$js_inorderlist_url = function_exists('get_js_safe_string') ? get_js_safe_string($inorderlist_url) : '"'.strtr((string)$inorderlist_url, $js_replace).'"';
+
 echo '<meta http-equiv="content-type" content="text/html; charset=utf-8">'.PHP_EOL;
 echo '<script>'.PHP_EOL;
 echo 'if(confirm("복구하신 주문 상세페이지로 이동하시겠습니까?"))'.PHP_EOL;
-echo 'document.location.href = "./orderform.php?od_id='.$od_id.'";'.PHP_EOL;
+echo 'document.location.href = '.$js_orderform_url.';'.PHP_EOL;
 echo 'else'.PHP_EOL;
-echo 'document.location.href = "./inorderlist.php?'.str_replace('&amp;', '&', $qstr).'";'.PHP_EOL;
+echo 'document.location.href = '.$js_inorderlist_url.';'.PHP_EOL;
 echo '</script>'.PHP_EOL;

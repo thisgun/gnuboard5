@@ -32,9 +32,9 @@ function get_shop_item_with_category($it_id, $seo_title='', $add_query=''){
     global $g5, $default;
 
     if( $seo_title ){
-        $sql = " select a.*, b.ca_name, b.ca_use from {$g5['g5_shop_item_table']} a, {$g5['g5_shop_category_table']} b where a.it_seo_title = '".sql_real_escape_string(generate_seo_title($seo_title))."' and a.ca_id = b.ca_id $add_query";
+        $sql = " select a.*, b.ca_name, b.ca_use from {$g5['g5_shop_item_table']} a, {$g5['g5_shop_category_table']} b where a.it_seo_title = '".sql_real_escape_string(generate_seo_title($seo_title))."' and a.ca_id = b.ca_id $add_query order by it_id desc limit 1";
     } else {
-        $sql = " select a.*, b.ca_name, b.ca_use from {$g5['g5_shop_item_table']} a, {$g5['g5_shop_category_table']} b where a.it_id = '$it_id' and a.ca_id = b.ca_id $add_query";
+        $sql = " select a.*, b.ca_name, b.ca_use from {$g5['g5_shop_item_table']} a, {$g5['g5_shop_category_table']} b where a.it_id = '$it_id' and a.ca_id = b.ca_id $add_query order by it_id desc limit 1";
     }
     
     $item = sql_fetch($sql);
@@ -82,7 +82,47 @@ function get_shop_navigation_data($is_cache, $ca_id, $ca_id2='', $ca_id3=''){
         }
     }
 
+    // 공통 전체 분류 트리는 기존 3단계 구조를 유지하고 현재 경로의 깊은 단계만 조회한다.
+    for ($depth = 4; $depth <= 5 && strlen($ca_id) >= $depth * 2; $depth++) {
+        $parent = substr($ca_id, 0, ($depth - 1) * 2);
+        $result = sql_query(get_shop_category_sql($parent, $depth * 2));
+        while ($row = sql_fetch_array($result)) {
+            $row['url'] = shop_category_url($row['ca_id']);
+            $datas[$depth - 1][] = $row;
+        }
+    }
+
     return $datas;
+}
+
+// 4·5단계에서는 선택 경로의 5단계를 우선 표시하고, 없으면 4단계 형제를 표시한다.
+function get_shop_category_menu_groups($ca_id)
+{
+    $length = strlen($ca_id);
+    $groups = array();
+    if ($length >= 8) {
+        $queries = array(
+            array('5단계 분류', substr($ca_id, 0, 8), 10),
+            array('4단계 분류', substr($ca_id, 0, 6), 8),
+        );
+    } else {
+        $queries = array(array('하위 분류', $ca_id, $length + 2));
+    }
+    foreach ($queries as $query) {
+        $rows = array();
+        $result = sql_query(get_shop_category_sql($query[1], $query[2]));
+        while ($row = sql_fetch_array($result)) $rows[] = $row;
+        if (!$rows && $length < 8) {
+            $query[0] = '현재 단계 분류';
+            $result = sql_query(get_shop_category_sql(substr($ca_id, 0, -2), $length));
+            while ($row = sql_fetch_array($result)) $rows[] = $row;
+        }
+        if ($rows) {
+            $groups[] = array('label' => $query[0], 'categories' => $rows);
+            break;
+        }
+    }
+    return $groups;
 }
 
 function get_shop_category_by($is_cache, $case, $value){

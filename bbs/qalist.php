@@ -1,13 +1,15 @@
 <?php
 include_once('./_common.php');
 
+$is_admin = get_super_admin_type($is_admin);
+
 if($is_guest)
     alert('회원이시라면 로그인 후 이용해 보십시오.', './login.php?url='.urlencode(G5_BBS_URL.'/qalist.php'));
 
 $qaconfig = get_qa_config();
 
 $token = '';
-if( $is_admin ){
+if($is_admin === 'super') {
     $token = _token();
     set_session('ss_qa_delete_token', $token);
 }
@@ -16,7 +18,7 @@ $g5['title'] = $qaconfig['qa_title'];
 include_once('./qahead.php');
 
 $skin_file = $qa_skin_path.'/list.skin.php';
-$is_auth = $is_admin ? true : false;
+$is_auth = ($is_admin === 'super');
 
 $category_option = '';
 
@@ -29,7 +31,8 @@ if ($qaconfig['qa_category']) {
     $category_option .= '>전체</a></li>';
 
     $categories = explode('|', $qaconfig['qa_category']); // 구분자가 | 로 되어 있음
-    for ($i=0; $i<count($categories); $i++) {
+    $categories_cnt = count($categories);
+    for ($i=0; $i<$categories_cnt; $i++) {
         $category = trim($categories[$i]);
         if ($category=='') continue;
         $category_msg = '';
@@ -46,7 +49,8 @@ if(is_file($skin_file)) {
     $sql_common = " from {$g5['qa_content_table']} ";
     $sql_search = " where qa_type = '0' ";
 
-    if(!$is_admin)
+    // 최고관리자가 아니면 본인 문의만 조회 (게시판/그룹 관리자 문맥으로 우회 불가)
+    if($is_admin !== 'super')
         $sql_search .= " and mb_id = '{$member['mb_id']}' ";
 
     if($sca) {
@@ -130,7 +134,7 @@ if(is_file($skin_file)) {
 
     $is_checkbox = false;
     $admin_href = '';
-    if($is_admin) {
+    if($is_admin === 'super') {
         $is_checkbox = true;
         $admin_href = G5_ADMIN_URL.'/qa_config.php';
     }

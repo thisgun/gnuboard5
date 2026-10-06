@@ -33,14 +33,14 @@ add_stylesheet('<link rel="stylesheet" href="'.$member_skin_url.'/style.css">', 
         <h2>회원로그인 안내</h2>
         <div>
             <a href="<?php echo G5_BBS_URL ?>/password_lost.php">아이디/비밀번호 찾기</a>
-            <a href="./register.php">회원 가입</a>
+            <a href="<?php echo G5_BBS_URL ?>/register.php">회원 가입</a>
         </div>
     </section>
     </form>
 
 
     <?php // 쇼핑몰 사용시 여기부터 ?>
-    <?php if ($default['de_level_sell'] == 1) { // 상품구입 권한 ?>
+    <?php if (isset($default['de_level_sell']) && $default['de_level_sell'] == 1) { // 상품구입 권한 ?>
 
         <!-- 주문하기, 신청하기 -->
         <?php if (preg_match("/orderform.php/", $url)) { ?>

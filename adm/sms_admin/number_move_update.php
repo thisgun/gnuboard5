@@ -2,7 +2,9 @@
 $sub_menu = "900800";
 include_once('./_common.php');
 
-auth_check_menu($auth, $sub_menu, "r");
+auth_check_menu($auth, $sub_menu, "w");
+
+if (function_exists('check_request_origin')) check_request_origin(G5_ADMIN_URL);
 
 $post_chk_bg_no = isset($_POST['chk_bg_no']) ? $_POST['chk_bg_no'] : array();
 
@@ -71,18 +73,16 @@ if( count($save_group) ){ //그룹테이블 업데이트
 
 $msg = '해당 번호를 선택한 그룹으로 '.$act.' 하였습니다.';
 $opener_href = './num_book.php?page='.$page;
-
-echo <<<HEREDOC
+?>
 <meta http-equiv="content-type" content="text/html; charset=utf-8">
 <script>
-alert("$msg");
-opener.document.location.href = "$opener_href";
+alert("<?php echo $msg; ?>");
+opener.document.location.href = "<?php echo $opener_href; ?>";
 window.close();
 </script>
 <noscript>
 <p>
-    "$msg"
+    <?php echo $msg; ?>
 </p>
-<a href="$opener_href">돌아가기</a>
+<a href="<?php echo $opener_href; ?>">돌아가기</a>
 </noscript>
-HEREDOC;

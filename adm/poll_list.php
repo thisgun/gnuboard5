@@ -6,6 +6,11 @@ auth_check_menu($auth, $sub_menu, 'r');
 
 $sql_common = " from {$g5['poll_table']} ";
 
+$allowed_sfl = array('po_subject');
+if (!in_array($sfl, $allowed_sfl)) {
+    $sfl = 'po_subject';
+}
+
 $sql_search = " where (1) ";
 if ($stx) {
     $sql_search .= " and ( ";
@@ -21,6 +26,9 @@ if (!$sst) {
     $sst = "po_id";
     $sod = "desc";
 }
+$allowed_sst = array('po_id', 'po_subject', 'po_level', 'po_use', 'po_etc');
+if ($sst && !in_array($sst, $allowed_sst)) $sst = 'po_id';
+if ($sod && !in_array(strtolower($sod), array('asc', 'desc'))) $sod = '';
 $sql_order = " order by {$sst} {$sod} ";
 
 $sql = " select count(*) as cnt
